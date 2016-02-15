@@ -61,6 +61,8 @@ insert into chart (accno,description,charttype,gifi_accno,category,link) values 
 insert into chart (accno,description,charttype,gifi_accno,category,link) values ('5540','Taxes - Personal Property','A','','E','');
 insert into chart (accno,description,charttype,gifi_accno,category,link) values ('5550','Taxes - Franchise','A','','E','');
 insert into chart (accno,description,charttype,gifi_accno,category,link) values ('5560','Taxes - Foreign Withholding','A','','E','');
+insert into chart (accno,description,charttype,gifi_accno,category,link)
+values ('4010','Zeitlohn','A','','I','AR_amount:IC_income');
 --
 insert into tax (chart_id,rate) values ((select id from chart where accno = '2150'),0.05);
 --
