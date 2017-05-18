@@ -86,7 +86,6 @@ sub delete_transaction {
 sub post_transaction {
   my ($self, $myconfig, $form, $dbh) = @_;
   
-  my $null;
   my $project_id;
   my $department_id;
   my $i;
@@ -151,7 +150,7 @@ sub post_transaction {
       }
     }
   }
-  
+
   if (!$form->{id}) {
    
     my $uid = localtime;
@@ -162,13 +161,13 @@ sub post_transaction {
 		                 WHERE login = '$form->{login}'),
 		'$approved')|;
     $dbh->do($query) || $form->dberror($query);
-    
+
     $query = qq|SELECT id FROM gl
                 WHERE reference = '$uid'|;
     ($form->{id}) = $dbh->selectrow_array($query);
   }
   
-  ($null, $department_id) = split /--/, $form->{department};
+  (undef, $department_id) = split /--/, $form->{department};
   $department_id *= 1;
 
   $form->{reference} = $form->update_defaults($myconfig, 'glnumber', $dbh) unless $form->{reference};
@@ -223,7 +222,7 @@ sub post_transaction {
     }
 
     # add the record
-    ($null, $project_id) = split /--/, $form->{"projectnumber_$i"};
+    (undef, $project_id) = split /--/, $form->{"projectnumber_$i"};
     $project_id ||= 'NULL';
     
     if ($keepcleared) {
@@ -250,21 +249,21 @@ sub post_transaction {
 
       if ($form->{currency} ne $form->{defaultcurrency}) {
 
-	$amount = $form->round_amount($amount * ($form->{exchangerate} - 1), $form->{precision});
+				$amount = $form->round_amount($amount * ($form->{exchangerate} - 1), $form->{precision});
 	
-	if ($amount) {
-	  $query = qq|INSERT INTO acc_trans (trans_id, chart_id, amount, transdate,
-		      source, project_id, fx_transaction, memo, cleared, approved)
-		      VALUES
-		      ($form->{id}, (SELECT id
-				     FROM chart
-				     WHERE accno = '$accno'),
-		       $amount, '$form->{transdate}', |.
-		       $dbh->quote($form->{"source_$i"}) .qq|,
-		      $project_id, '1', |.$dbh->quote($form->{"memo_$i"}).qq|,
-		      $cleared, '$approved')|;
-	  $dbh->do($query) || $form->dberror($query);
-	}
+				if ($amount) {
+					$query = qq|INSERT INTO acc_trans (trans_id, chart_id, amount, transdate,
+								source, project_id, fx_transaction, memo, cleared, approved)
+								VALUES
+								($form->{id}, (SELECT id
+									 FROM chart
+									 WHERE accno = '$accno'),
+								 $amount, '$form->{transdate}', |.
+								 $dbh->quote($form->{"source_$i"}) .qq|,
+								$project_id, '1', |.$dbh->quote($form->{"memo_$i"}).qq|,
+								$cleared, '$approved')|;
+					$dbh->do($query) || $form->dberror($query);
+				}
       }
     }
   }
@@ -323,7 +322,6 @@ sub transactions {
   my $query;
   my $sth;
   my $var;
-  my $null;
   
   my %defaults = $form->get_defaults($dbh, \@{['precision', 'company']});
   for (keys %defaults) { $form->{$_} = $defaults{$_} }
@@ -355,7 +353,7 @@ sub transactions {
     $apwhere .= " AND lower(ct.vendornumber) LIKE '$var'";
   }
   if ($form->{department}) {
-    ($null, $var) = split /--/, $form->{department};
+    (undef, $var) = split /--/, $form->{department};
     $glwhere .= " AND g.department_id = $var";
     $arwhere .= " AND a.department_id = $var";
     $apwhere .= " AND a.department_id = $var";
@@ -429,8 +427,10 @@ sub transactions {
     $arwhere .= " AND lower(ac.memo) LIKE '$var'";
     $apwhere .= " AND lower(ac.memo) LIKE '$var'";
   }
-  
-  ($form->{datefrom}, $form->{dateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+
+  unless ($form->{datefrom} || $form->{dateto}) {
+    ($form->{datefrom}, $form->{dateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  }
   
   if ($form->{datefrom}) {
     $glwhere .= " AND ac.transdate >= '$form->{datefrom}'";
@@ -472,6 +472,8 @@ sub transactions {
     $glwhere .= " AND c.category = '$form->{category}'";
     $arwhere .= " AND c.category = '$form->{category}'";
     $apwhere .= " AND c.category = '$form->{category}'";
+
+    delete $form->{l_contra};
   }
 
   if ($form->{accno} || $form->{gifi_accno}) {
@@ -644,6 +646,7 @@ sub transactions {
     for (qw(address1 address2 city zipcode country)) { $ref->{address} .= "$ref->{$_} " }
 
     $trans{$ref->{id}}{$i} = {
+                 transdate => $ref->{transdate},
                       link => $ref->{link},
                       type => $ref->{type},
                      accno => $ref->{accno},
@@ -653,7 +656,7 @@ sub transactions {
                     amount => $ref->{debit} + $ref->{credit}
 		             };
     push @{ $form->{GL} }, $ref;
-    
+
     $i++;
     
   }
@@ -683,7 +686,6 @@ sub transactions {
       my %accno = ();
       my $aa = 0;
       my $j;
-      my %seen = ();
 
       for $i (reverse sort { $trans{$id}{$a}{amount} <=> $trans{$id}{$b}{amount} } keys %{$trans{$id}}) {
 
@@ -701,6 +703,7 @@ sub transactions {
 	  } else {
 	    push @accno, { accno => $trans{$id}{$i}{accno},
 		      gifi_accno => $trans{$id}{$i}{gifi_accno},
+                       transdate => $trans{$id}{$i}{transdate},
 			       i => $i };
 	  }
 	}
@@ -719,10 +722,11 @@ sub transactions {
 	for (@arap) {
 	  $i = 0;
 	  for $ref (@accno) {
-	    $form->{GL}[$_]{contra} .= "$ref->{accno} " unless $seen{$ref->{accno}};
-	    $seen{$ref->{accno}} = 1;
-	    $form->{GL}[$_]{gifi_contra} .= "$ref->{gifi_accno} " unless $seen{$ref->{gifi_accno}};
-	    $seen{$ref->{gifi_accno}} = 1;
+	    $form->{GL}[$_]{contra} .= "$ref->{accno} " unless $seen{"$ref->{accno}$ref->{transdate}"};
+	    $seen{"$ref->{accno}$ref->{transdate}"} = 1;
+
+	    $form->{GL}[$_]{gifi_contra} .= "$ref->{gifi_accno} " unless $seen{"$ref->{gifi_accno}$ref->{transdate}"};
+	    $seen{"$ref->{gifi_accno}$ref->{transdate}"} = 1;
 	  }
 	  $i++;
 	}
@@ -733,15 +737,12 @@ sub transactions {
       } else {
 	
 	%accno = %{$trans{$id}};
-	$j = 0;
-	
+
 	for $i (reverse sort { $trans{$id}{$a}{amount} <=> $trans{$id}{$b}{amount} } keys %{$trans{$id}}) {
 	  $found = 0;
 	  $amount = $trans{$id}{$i}{amount};
-	  $accno = $trans{$id}{$i}{accno};
-	  $gifi_accno = $trans{$id}{$i}{gifi_accno};
 	  $j = $i;
-	  
+
 	  if ($trans{$id}{$i}{debit}) {
 	    $amt = "debit";
 	    $rev = "credit";
@@ -749,12 +750,12 @@ sub transactions {
 	    $amt = "credit";
 	    $rev = "debit";
 	  }
-	  
-	  if ($trans{$id}{$i}{$amt}) {
+
+	  if ($amount) {
 	    for (keys %accno) {
-	      if ($accno{$_}{$rev} == $trans{$id}{$i}{$amt}) {
-		$form->{GL}[$_]{contra} = $trans{$id}{$i}{accno};
-		$form->{GL}[$_]{gifi_contra} = $trans{$id}{$i}{gifi_accno};
+	      if ($accno{$_}{$rev} == $amount) {
+		$form->{GL}[$i]{contra} = $accno{$_}{accno};
+		$form->{GL}[$i]{gifi_contra} = $accno{$_}{gifi_accno};
 		$found = 1;
 		last;
 	      }
@@ -762,25 +763,21 @@ sub transactions {
 	  }
 
 	  if (!$found) {
-	    delete $accno{$j};
-	    delete $trans{$id}{$j};
-	    
 	    if ($amount) {
-	      for $i (reverse sort { $a{amount} <=> $b{amount} } keys %accno) {
-		if ($accno{$i}{amount} <= $amount) {
-		  $form->{GL}[$i]{contra} = $accno;
-		  $form->{GL}[$i]{gifi_contra} = $gifi_accno;
-		  $amount = $form->round_amount($amount - $accno{$i}{amount}, 10);
-		  last if $amount < 0;
+	      for $i (reverse sort { $accno{$a}{amount} <=> $accno{$b}{amount} } keys %accno) {
+		if ($accno{$i}{$rev}) {
 
-		  $form->{GL}[$j]{contra} .= "$accno{$i}{accno} " unless $seen{$accno{$i}{accno}};
-		  $seen{$accno{$i}{accno}};
-		  $form->{GL}[$j]{gifi_contra} .= "$accno{$i}{gifi_accno} " unless $seen{$accno{$i}{gifi_accno}};
-		  $seen{$accno{$i}{gifi_accno}};
-		  delete $accno{$i};
-		  delete $trans{$id}{$i};
+                  # add contra to accno
+		  $form->{GL}[$j]{contra} .= "$accno{$i}{accno} ";
+		  $form->{GL}[$j]{gifi_contra} .= "$accno{$i}{gifi_accno} ";
+
+		  $amount = $form->round_amount($amount - $accno{$i}{$rev}, 10);
+                  last if $amount <= 0;
+
 		}
 	      }
+              $form->{GL}[$j]{contra} = join ' ', sort split / /, $form->{GL}[$j]{contra};
+              $form->{GL}[$j]{gifi_contra} = join ' ', sort split / /, $form->{GL}[$j]{gifi_contra};
 	    }
 	  }
 	}

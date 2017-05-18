@@ -160,6 +160,37 @@ sub save_account {
     }
   }
 
+  # update taxpart and taxservice
+  if ($form->{oldIC_taxpart} ne $form->{IC_taxpart}) {
+    $query = qq|DELETE FROM partstax
+                WHERE parts_id IN (SELECT id FROM parts
+                                   WHERE inventory_accno_id > 0)
+                AND chart_id = $chart_id|;
+    $dbh->do($query) || $form->dberror($query);
+
+    if ($form->{IC_taxpart}) {
+      $query = qq|INSERT INTO partstax
+                  SELECT id, $chart_id FROM parts
+                  WHERE inventory_accno_id > 0|;
+      $dbh->do($query) || $form->dberror($query);
+    }
+  }
+
+  if ($form->{oldIC_taxservice} ne $form->{IC_taxservice}) {
+    $query = qq|DELETE FROM partstax
+                WHERE parts_id IN (SELECT id FROM parts
+                                   WHERE inventory_accno_id IS NULL)
+                AND chart_id = $chart_id|;
+    $dbh->do($query) || $form->dberror($query);
+
+    if ($form->{IC_taxservice}) {
+      $query = qq|INSERT INTO partstax
+                  SELECT id, $chart_id FROM parts
+                  WHERE inventory_accno_id IS NULL|;
+      $dbh->do($query) || $form->dberror($query);
+    }
+  }
+
   my %audittrail = ( tablename  => 'chart',
                      reference  => $form->{accno},
 		     formname   => '',
@@ -1059,9 +1090,9 @@ sub save_language {
   my $dbh = $form->dbconnect($myconfig);
 
   $form->{code} =~ s/ //g;
-  foreach my $item (qw(code description)) {
-    $form->{$item} =~ s/-(-)+/-/g;
-    $form->{$item} =~ s/ ( )+/-/g;
+  for (qw(code description)) {
+    $form->{$_} =~ s/-(-)+/-/g;
+    $form->{$_} =~ s/ ( )+/-/g;
   }
   
   # if there is an id
@@ -1466,26 +1497,11 @@ sub update_recurring {
 
 }
 
-sub check_access {
-	my ($self, undef, $form, $folders, $errormessage) = @_;
-	
-	$errormessage ||= 'Access Denied!';
-	$form->error("$form->{file}: $errormessage") unless @$folders;
-	my $folderstring = join "|^", @$folders;
-	$_ = $form->{file};
-	s|\w+/\.\./||;
-	s|~||g;
-	s|\.+/||g;
-	s|//|/|g;
-	$form->error("$_: $errormessage") unless /^$folderstring/ and -f $_;
-	$form->{file} = $_;
-}
  
 sub load_template {
   my ($self, $form) = @_;
   
-  $self->check_access(@_);
-  open(TEMPLATE, "$form->{file}") or $form->error("$form->{file} : $!");
+  open(TEMPLATE, "$form->{file}");
 
   while (<TEMPLATE>) {
     $form->{body} .= $_;
@@ -1514,7 +1530,6 @@ sub save_template {
     }
   }
   
-  $self->check_access(@_);
   open(TEMPLATE, ">$form->{file}") or $form->error("$form->{file} : $!");
   
   # strip 
@@ -1553,12 +1568,11 @@ sub save_preferences {
 sub save_defaults {
   my ($self, $myconfig, $form) = @_;
 
-  for (qw(IC IC_income IC_expense FX_gain FX_loss cashovershort)) { ($form->{$_}) = split /--/, $form->{$_} }
+  for (qw(IC IC_income IC_expense fxgainloss cashovershort)) { ($form->{$_}) = split /--/, $form->{$_} }
   $form->{inventory_accno} = $form->{IC};
   $form->{income_accno} = $form->{IC_income};
   $form->{expense_accno} = $form->{IC_expense};
-  $form->{fxgain_accno} = $form->{FX_gain};
-  $form->{fxloss_accno} = $form->{FX_loss};
+  $form->{fxgainloss_accno} = $form->{fxgainloss};
   $form->{cashovershort_accno} = $form->{cashovershort};
   
   # connect to database
@@ -1577,7 +1591,7 @@ sub save_defaults {
   $sth->execute('version', $form->{dbversion}) || $form->dberror;
   $sth->finish;
   
-  for (qw(inventory income expense fxgain fxloss cashovershort)) {
+  for (qw(inventory income expense fxgainloss cashovershort)) {
     $query = qq|INSERT INTO defaults (fldname, fldvalue)
                 VALUES ('${_}_accno_id', (SELECT id
 		                FROM chart
@@ -1625,8 +1639,7 @@ sub defaultaccounts {
   $form->{defaults}{IC_sale} = $form->{income_accno_id};
   $form->{defaults}{IC_expense} = $form->{expense_accno_id};
   $form->{defaults}{IC_cogs} = $form->{expense_accno_id};
-  $form->{defaults}{FX_gain} = $form->{fxgain_accno_id};
-  $form->{defaults}{FX_loss} = $form->{fxloss_accno_id};
+  $form->{defaults}{fxgainloss} = $form->{fxgainloss_accno_id};
   $form->{defaults}{cashovershort} = $form->{cashovershort_accno_id};
   
   $query = qq|SELECT c.id, c.accno, c.description, c.link,
@@ -1672,9 +1685,7 @@ sub defaultaccounts {
   while (my $ref = $sth->fetchrow_hashref(NAME_lc)) {
     $ref->{description} = $ref->{translation} if $ref->{translation};
 
-    %{ $form->{accno}{FX_gain}{$ref->{accno}} } = ( id => $ref->{id},
-                                      description => $ref->{description} );
-    %{ $form->{accno}{FX_loss}{$ref->{accno}} } = ( id => $ref->{id},
+    %{ $form->{accno}{fxgainloss}{$ref->{accno}} } = ( id => $ref->{id},
                                       description => $ref->{description} );
     %{ $form->{accno}{cashovershort}{$ref->{accno}} } = ( id => $ref->{id},
                                       description => $ref->{description} );
@@ -2532,7 +2543,9 @@ sub get_exchangerates {
 
   $form->{currencies} = $form->get_currencies($myconfig, $dbh);
 
-  ($form->{transdatefrom}, $form->{transdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  unless ($form->{transdatefrom} || $form->{transdateto}) {
+    ($form->{transdatefrom}, $form->{transdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  }
   
   $where .= " AND transdate >= '$form->{transdatefrom}'" if $form->{transdatefrom};
   $where .= " AND transdate <= '$form->{transdateto}'" if $form->{transdateto};   
@@ -3168,7 +3181,7 @@ sub restore {
   my @sql = <FH>;
   close(FH);
   
-  $file = "$myconfig->{dbdriver}-custom_tables.sql";
+  $file = "sql/$myconfig->{dbdriver}-custom_tables.sql";
   if (open(FH, "$file")) {
     push @sql, <FH>;
     close(FH);
@@ -3181,7 +3194,7 @@ sub restore {
 
   for (@sql) {
     
-    if (/references (\w+)/i) {
+    if (/references /i) {
       $references{$el} = 1;
     }
     
@@ -3204,10 +3217,13 @@ sub restore {
     return 0;
   }
 
+  $dbh->{PrintError} = 0;
+
   for ($dbh->tables) {
     if ($myconfig->{dbdriver} =~ /Pg/) {
       if (!/(pg_catalog|information_schema)/) {
-	$tables{$_} = 1;
+        $_ =~ s/public\.//;
+        $tables{$_} = 1;
       }
     } else {
       $tables{$_} = 1;
@@ -3219,11 +3235,13 @@ sub restore {
     $query = qq|DROP TABLE $_;|;
     $dbh->do($query);
   }
-  
+
   # drop tables and sequences
   for (keys %tables) {
-    $query = qq|DROP TABLE $_;|;
-    $dbh->do($query);
+    unless ($references{$_}) {
+      $query = qq|DROP TABLE $_;|;
+      $dbh->do($query);
+    }
   }
 
   # drop sequences
@@ -3237,24 +3255,31 @@ sub restore {
   close(FH);
   
   for (@sql) {
-    next if /--/;
+    next if /^--/;
 
     $query .= $_;
     
     if (/create function/i) {
       while (!/-- end function/i) {
-	$_ = shift @sql;
-	$query .= $_;
+        $_ = shift @sql;
+        $query .= $_;
       }
     }
     
     if (/;\s*$/) {
       if ($query =~ /VALUES/) {
-	next if $query !~ /\);$/;
+        next if $query !~ /\);$/;
       }
-      $query =~ s/;\s*$//;
+      $query =~ s/;(\s*)$//;
 
-      $dbh->do($query) or $form->info($DBI::errstr);
+      if ($query =~ /^DROP /) {
+        (undef, undef, $el) = split / /, $query;
+        if ($tables{$el} || $references{$el}) {
+          $query = "";
+          next;
+        }
+      }
+      $dbh->do($query) if $query;
       $query = "";
     }
   }
@@ -3296,10 +3321,11 @@ sub audit_log {
   # connect to database
   my $dbh = $form->dbconnect($myconfig);
 
+  my $id;
   my $where = "WHERE 1 = 1";
 
   if ($form->{employee}) {
-    my ($null, $id) = split /--/, $form->{employee};
+    (undef, $id) = split /--/, $form->{employee};
     $where .= qq| AND a.employee_id = $id|;
   }
   if ($form->{transdatefrom}) {

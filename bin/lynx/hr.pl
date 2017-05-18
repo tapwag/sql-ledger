@@ -966,7 +966,8 @@ sub employee_footer {
     }
 
     for (keys %button) { delete $button{$_} if ! $f{$_} }
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+    
+    $form->print_button(\%button);
    
   }
 
@@ -1108,7 +1109,7 @@ sub access_control {
   %button = ('Continue' => { ndx => 1, key => 'C', value => $locale->text('Continue') }
 	      );
 	     
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
    
   print qq|
  
@@ -1168,6 +1169,7 @@ sub save_employee {
 
   $form->isblank("name", $locale->text("Name missing!"));
   $form->error("$memberfile : ".$locale->text('locked!')) if (-f ${memberfile}.LCK);
+  $form->error($locale->text('Cannot use admin as login!')) if $form->{employeelogin} eq 'admin';
 
   $form->{userspath} = $userspath;
   
@@ -1210,7 +1212,9 @@ sub save_memberfile {
   if ($form->{employeelogin}) {
     $employeelogin = $form->{employeelogin};
     $employeelogin .= "\@$myconfig{dbname}";  # new format
-    
+
+    unlink "$userspath/${employeelogin}.tan";
+
     # assign values from old entries
     $oldlogin = $form->{oldemployeelogin};
     $oldlogin .= "\@$myconfig{dbname}";
@@ -1228,14 +1232,14 @@ sub save_memberfile {
       $form->{employeepassword} = $oldemployeepassword if $form->{nochange};
 
       if ($form->{employeepassword} ne $oldemployeepassword) {
-	if ($form->{employeepassword}) {
-	  $password = crypt $form->{employeepassword}, substr($form->{employeelogin}, 0, 2);
-	  push @memberlogin, "password=$password\n";
-	}
+        if ($form->{employeepassword}) {
+          $password = crypt $form->{employeepassword}, substr($form->{employeelogin}, 0, 2);
+          push @memberlogin, "password=$password\n";
+        }
       } else {
-	if ($oldemployeepassword) {
-	  push @memberlogin, "password=$oldemployeepassword\n";
-	}
+        if ($oldemployeepassword) {
+          push @memberlogin, "password=$oldemployeepassword\n";
+        }
       }
       
       for (qw(name email tan)) { push @memberlogin, "$_=$form->{$_}\n" if $form->{$_} }
@@ -1243,7 +1247,7 @@ sub save_memberfile {
       @{ $member{$employeelogin} } = ();
       
       for (sort @memberlogin) {
-	push @{ $member{$employeelogin} }, $_;
+        push @{ $member{$employeelogin} }, $_;
       }
       
     } else {
@@ -1256,13 +1260,13 @@ sub save_memberfile {
       $m{timeout} = 86400;
 
       if ($form->{employeepassword}) {
-	$m{password} = crypt $form->{employeepassword}, substr($form->{employeelogin}, 0, 2);
+        $m{password} = crypt $form->{employeepassword}, substr($form->{employeelogin}, 0, 2);
       }
 
       @{ $member{$employeelogin} } = ();
       
       for (sort keys %m) {
-	push @{ $member{$employeelogin} }, "$_=$m{$_}\n" if $m{$_};
+        push @{ $member{$employeelogin} }, "$_=$m{$_}\n" if $m{$_};
       }
     }
     push @{ $member{$employeelogin} }, "\n";
@@ -1293,9 +1297,9 @@ sub save_memberfile {
     if ($form->{oldemployeelogin}) {
       for ("$form->{oldemployeelogin}.conf", "$form->{oldemployeelogin}\@$myconfig{dbname}.conf") {
 	$filename = "$userspath/$_";
-	if (-f $filename) {
-	  unlink "$filename";
-	}
+        if (-f $filename) {
+          unlink "$filename";
+        }
       }
     }
   }
@@ -1497,7 +1501,7 @@ sub payroll_header {
 
   $reference_documents = &references;
 
-  ($null, $employee_id) = split /--/, $form->{oldemployee};
+  (undef, $employee_id) = split /--/, $form->{oldemployee};
   
   $form->header;
 
@@ -1532,7 +1536,7 @@ sub payroll_header {
 	    <table>
 	      <tr>
 		<th align=right nowrap>|.$locale->text('Employee').qq| <font color=red>*</font></th>
-		<td><select name=employee onChange="javascript:document.forms[0].submit()">|
+		<td><select name=employee onChange="javascript:document.main.submit()">|
 		.$form->select_option($form->{selectemployee}, $form->{employee}, 1)
 		.qq|</select>
 		<a href=hr.pl?action=edit&id=$employee_id&db=employee&login=$form->{login}&path=$form->{path} target=_blank>?</a>
@@ -1735,7 +1739,7 @@ sub payroll_footer {
       for ("Preview", "Print and Post", "Print and Post as new") { delete $button{$_} }
     }
 
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+    $form->print_button(\%button);
     
   }
 
@@ -1944,7 +1948,7 @@ sub update_payroll {
 
 sub post {
 
-  ($null, $employee_id) = split /--/, $form->{employee};
+  (undef, $employee_id) = split /--/, $form->{employee};
 
   $form->error($locale->text('Employee missing!')) unless $employee_id;
   $form->isblank("transdate", $locale->text('Date missing!'));
@@ -2482,7 +2486,7 @@ sub payroll_transactions {
     delete $button{'Save Report'} unless $form->{savereport};
   }
   
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
 
   if ($form->{menubar}) {
     require "$form->{path}/menu.pl";
@@ -2641,7 +2645,7 @@ sub search_deduction {
 
   $form->hide_form(qw(db callback path login));
 
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
   
   if ($form->{menubar}) {
     require "$form->{path}/menu.pl";
@@ -2873,7 +2877,8 @@ sub deduction_footer {
     }
 
     for (keys %button) { delete $button{$_} if ! $f{$_} }
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+
+    $form->print_button(\%button);
     
   }
 
@@ -2988,7 +2993,7 @@ sub search_wage {
 
   $form->hide_form(qw(db callback path login));
 
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
   
   if ($form->{menubar}) {
     require "$form->{path}/menu.pl";
@@ -3113,7 +3118,8 @@ sub wage_footer {
     }
 
     for (keys %button) { delete $button{$_} if ! $f{$_} }
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+
+    $form->print_button(\%button);
     
   }
 

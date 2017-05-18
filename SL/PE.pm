@@ -24,14 +24,14 @@ sub projects {
   $form->{sort} ||= "projectnumber";
   
   my $query;
-  my $where = "WHERE 1=1";
+  my $where = "WHERE pr.parts_id = 0 OR pr.parts_id IS NULL";
   
   $query = qq|SELECT pr.*, c.name
 	      FROM project pr
 	      LEFT JOIN customer c ON (c.id = pr.customer_id)|;
 
   if ($form->{type} eq 'job') {
-    $where .= qq| AND pr.id NOT IN (SELECT DISTINCT id
+    $where = qq|WHERE pr.id NOT IN (SELECT DISTINCT id
 			            FROM parts
 			            WHERE project_id > 0)|;
   }
@@ -46,7 +46,9 @@ sub projects {
     $where .= " AND lower(pr.description) LIKE '$var'";
   }
 
-  ($form->{startdatefrom}, $form->{startdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  unless ($form->{startdatefrom} || $form->{startdateto}) {
+    ($form->{startdatefrom}, $form->{startdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  }
   
   if ($form->{startdatefrom}) {
     $where .= " AND (pr.startdate IS NULL OR pr.startdate >= '$form->{startdatefrom}')";
@@ -292,7 +294,9 @@ sub jobs {
     $query .= " AND lower(pr.description) LIKE '$var'";
   }
 
-  ($form->{startdatefrom}, $form->{startdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  unless ($form->{startdatefrom} || $form->{startdateto}) {
+    ($form->{startdatefrom}, $form->{startdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  }
   
   if ($form->{startdatefrom}) {
     $query .= " AND pr.startdate >= '$form->{startdatefrom}'";
@@ -350,8 +354,8 @@ sub get_job {
   my $sth;
   my $ref;
 
-  my %defaults = $form->get_defaults($dbh, \@{['weightunit']});
-  $form->{weightunit} = $defaults{weightunit};
+  my %defaults = $form->get_defaults($dbh, \@{['weightunit', 'precision']});
+  for (keys %defaults) { $form->{$_} = $defaults{$_} }
   
   if ($form->{id} *= 1) {
     
@@ -625,6 +629,9 @@ sub stock_assembly {
   # connect to database
   my $dbh = $form->dbconnect_noauto($myconfig);
 
+  my %defaults = $form->get_defaults($dbh, \@{['precision']});
+  for (keys %defaults) { $form->{$_} = $defaults{$_} }
+
   my $ref;
   
   my $query = qq|SELECT *
@@ -685,6 +692,7 @@ sub stock_assembly {
       my %assembly = ();
       my $sellprice = 0;
       my $listprice = 0;
+      my $lastcost = 0;
       
       $jth->execute($form->{"id_$i"});
       while ($jref = $jth->fetchrow_hashref(NAME_lc)) {
@@ -711,9 +719,9 @@ sub stock_assembly {
                   WHERE partnumber = '$uid'|;
       ($uid) = $dbh->selectrow_array($query);
 
-      $lastcost = $form->round_amount($lastcost / $stock, $form->{precision});
-      $sellprice = ($pref->{sellprice}) ? $pref->{sellprice} : $form->round_amount($sellprice / $stock, $form->{precision});
-      $listprice = ($pref->{listprice}) ? $pref->{listprice} : $form->round_amount($listprice / $stock, $form->{precision});
+      $lastcost = $form->round_amount($lastcost / ($ref->{production} / $stock), $form->{precision});
+      $sellprice = ($pref->{sellprice}) ? $pref->{sellprice} : $form->round_amount($sellprice / ($ref->{production} / $stock), $form->{precision});
+      $listprice = ($pref->{listprice}) ? $pref->{listprice} : $form->round_amount($listprice / ($ref->{production} / $stock), $form->{precision});
 
       $rvh->execute($form->{"id_$i"});
       my ($rev) = $rvh->fetchrow_array;
@@ -721,7 +729,7 @@ sub stock_assembly {
       
       $query = qq|UPDATE parts SET
                   partnumber = '$pref->{partnumber}-$rev',
-		  description = '$pref->{partdescription}',
+		  description = '$pref->{description}',
 		  priceupdate = '$form->{stockingdate}',
 		  unit = '$pref->{unit}',
 		  listprice = $listprice,
@@ -873,9 +881,10 @@ sub delete_job {
   $dbh->do($query) || $form->dberror($query);
 
   # delete all the assemblies
-  $query = qq|DELETE FROM assembly a
-              JOIN parts p ON (a.id = p.id)
-              WHERE p.project_id = $form->{id}|;
+  $query = qq|DELETE FROM assembly
+              WHERE aid IN
+              (SELECT id FROM parts
+               WHERE project_id = $form->{id})|;
   $dbh->do($query) || $form->dberror($query);
 	
   $query = qq|DELETE FROM parts
@@ -1479,21 +1488,22 @@ sub get_jcitems {
   my %defaults = $form->get_defaults($dbh, \@{['precision']});
   $form->{precision} = $defaults{precision};
 
-  my $null;
   my $var;
   my $where;
   
   if ($form->{projectnumber}) {
-    ($null, $var) = split /--/, $form->{projectnumber};
+    (undef, $var) = split /--/, $form->{projectnumber};
     $where .= " AND j.project_id = $var";
   }
   
   if ($form->{employee}) {
-    ($null, $var) = split /--/, $form->{employee};
+    (undef, $var) = split /--/, $form->{employee};
     $where .= " AND j.employee_id = $var";
   }
 
-  ($form->{transdatefrom}, $form->{transdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  unless ($form->{transdatefrom} || $form->{transdateto}) {
+    ($form->{transdatefrom}, $form->{transdateto}) = $form->from_to($form->{year}, $form->{month}, $form->{interval}) if $form->{year} && $form->{month};
+  }
   
   if ($form->{transdatefrom}) {
     $where .= " AND j.checkedin >= '$form->{transdatefrom}'";
@@ -1509,9 +1519,9 @@ sub get_jcitems {
   $query = qq|SELECT j.id, j.description, j.qty - j.allocated AS qty,
 	       j.sellprice, j.parts_id, pr.$form->{vc}_id, j.project_id,
 	       j.checkedin::date AS transdate, j.notes,
-               c.name AS $form->{vc}, c.$form->{vc}number, pr.projectnumber,
-	       p.partnumber, e.name AS employee
-               FROM jcitems j
+         c.name AS $form->{vc}, c.$form->{vc}number, pr.projectnumber,
+	       p.partnumber, p.unit, e.name AS employee
+         FROM jcitems j
 	       JOIN project pr ON (pr.id = j.project_id)
 	       JOIN employee e ON (e.id = j.employee_id)
 	       JOIN parts p ON (p.id = j.parts_id)
@@ -1532,8 +1542,8 @@ sub get_jcitems {
   # tax accounts
   $query = qq|SELECT c.accno
               FROM chart c
-	      JOIN partstax pt ON (pt.chart_id = c.id)
-	      WHERE pt.parts_id = ?|;
+              JOIN partstax pt ON (pt.chart_id = c.id)
+              WHERE pt.parts_id = ?|;
   my $tth = $dbh->prepare($query) || $form->dberror($query);
   my $ptref;
 
@@ -1564,9 +1574,9 @@ sub get_jcitems {
     
   $query = qq|SELECT c.accno, t.rate
               FROM tax t
-	      JOIN chart c ON (c.id = t.chart_id)
-	      $where
-	      ORDER BY c.accno, t.validto|;
+              JOIN chart c ON (c.id = t.chart_id)
+              $where
+              ORDER BY c.accno, t.validto|;
   $sth = $dbh->prepare($query);
   $sth->execute || $form->dberror($query);
   while ($ref = $sth->fetchrow_hashref(NAME_lc)) {

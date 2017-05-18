@@ -606,10 +606,13 @@ sub invoice_details {
 sub delete_invoice {
   my ($self, $myconfig, $form, $spool, $dbh) = @_;
 
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
 
   # connect to database, turn off autocommit
-  $dbh = $form->dbconnect_noauto($myconfig) unless $dbh;
+  if (! $dbh) {
+    $dbh = $form->dbconnect_noauto($myconfig);
+    $disconnect = 1;
+  }
   
   $form->{id} *= 1;
   
@@ -686,11 +689,12 @@ sub delete_invoice {
 sub post_invoice {
   my ($self, $myconfig, $form, $dbh) = @_;
   
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
   
   # connect to database, turn off autocommit
   if (! $dbh) {
     $dbh = $form->dbconnect_noauto($myconfig);
+    $disconnect = 1;
   }
 
   my $query;
@@ -1089,12 +1093,13 @@ sub post_invoice {
   }
  
   foreach $ref (sort { $b->{amount} <=> $a->{amount} } @ { $form->{acc_trans}{lineitems} }) {
-    $amount = $ref->{amount} + $diff + $fxdiff;
-    $query = qq|INSERT INTO acc_trans (trans_id, chart_id, amount,
-                transdate, project_id, id)
-                VALUES ($form->{id}, $ref->{chart_id}, $amount * -1,
-		'$form->{transdate}', $ref->{project_id}, $ref->{id})|;
-    $dbh->do($query) || $form->dberror($query);
+    if ($amount = $ref->{amount} + $diff + $fxdiff) {
+      $query = qq|INSERT INTO acc_trans (trans_id, chart_id, amount,
+                  transdate, project_id, id)
+                  VALUES ($form->{id}, $ref->{chart_id}, $amount * -1,
+                  '$form->{transdate}', $ref->{project_id}, $ref->{id})|;
+      $dbh->do($query) || $form->dberror($query);
+    }
     $diff = 0;
     $fxdiff = 0;
   }
@@ -1316,10 +1321,9 @@ sub post_invoice {
       $amount = $form->round_amount($form->round_amount($form->{"paid_$i"} * $form->{exchangerate}, $form->{precision}) - $form->round_amount($form->{"paid_$i"} * $form->{"exchangerate_$i"}, $form->{precision}), $form->{precision});
       
       if ($amount) {
-	my $accno_id = ($amount > 0) ? $defaults{fxgain_accno_id} : $defaults{fxloss_accno_id};
 	$query = qq|INSERT INTO acc_trans (trans_id, chart_id, amount,
 	            transdate, fx_transaction, cleared, approved, vr_id)
-	            VALUES ($form->{id}, $accno_id,
+	            VALUES ($form->{id}, $defaults{fxgainloss_accno_id},
 		    $amount, '$form->{"datepaid_$i"}', '1', $cleared,
 		    '$approved', $voucherid)|;
         $dbh->do($query) || $form->dberror($query);
@@ -1933,8 +1937,7 @@ sub reverse_invoice {
 	      WHERE ac.trans_id = $form->{id}
 	      AND ac.vr_id = ?
 	      AND c.link LIKE '%AP_paid%'
-	      AND NOT (ac.chart_id = $defaults{fxgain_accno_id}
-	            OR ac.chart_id = $defaults{fxloss_accno_id})
+	      AND NOT ac.chart_id = $defaults{fxgainloss_accno_id}
               GROUP BY ac.approved|;
   my $ath = $dbh->prepare($query) || $form->dberror($query);
 
@@ -1989,7 +1992,7 @@ sub retrieve_invoice {
   $form->{currencies} = $form->get_currencies($myconfig, $dbh);
   
   # get default accounts and last invoice number
-  for (qw(inventory_accno income_accno expense_accno fxgain_accno fxloss_accno)) {
+  for (qw(inventory_accno income_accno expense_accno fxgainloss_accno)) {
     $query = qq|SELECT accno FROM chart
 		WHERE id = $defaults{"${_}_id"}|;
     ($form->{$_}) = $dbh->selectrow_array($query);
@@ -2026,6 +2029,13 @@ sub retrieve_invoice {
     for (keys %$ref) { $form->{$_} = $ref->{$_} }
     $sth->finish;
     
+    $form->{warehouse_id} *= 1;
+    $query = qq|SELECT SUM(qty)
+                FROM inventory
+                WHERE parts_id = ?
+                AND warehouse_id = $form->{warehouse_id}|;
+    my $wth = $dbh->prepare($query) || $form->dberror($query);
+
     $form->{payment_accno} = "";
     if ($form->{bank_accno}) {
       $form->{payment_accno} = ($form->{bank_accno_translation}) ? "$form->{bank_accno}--$form->{bank_accno_translation}" : "$form->{bank_accno}--$form->{bank_accno_description}";
@@ -2119,8 +2129,15 @@ sub retrieve_invoice {
       $tth->finish;
       chop $ref->{taxaccounts};
 
-      # price matrix
+      if ($form->{warehouse_id}) {
+        $wth->execute($ref->{id});
+        $ref->{onhand} = $wth->fetchrow_array;
+        $wth->finish;
+      }
+
       $ref->{sellprice} = $form->round_amount($ref->{fxsellprice} * $form->{$form->{currency}}, $decimalplaces);
+
+      # price matrix
       PM->price_matrix($pmh, $ref, undef, $decimalplaces, $form);
 
       $ref->{sellprice} = $ref->{fxsellprice};

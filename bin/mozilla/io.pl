@@ -127,6 +127,7 @@ sub display_row {
 
   $deliverydate = $locale->text('Delivery Date');
   $serialnumber = $locale->text('Serial No.');
+  $batchnumber = $locale->text('Batch No.');
   $projectnumber = $locale->text('Project');
   $orderxrefnumber = $locale->text('Order Number');
   $poxrefnumber = $locale->text('PO Number');
@@ -154,9 +155,9 @@ sub display_row {
   $spc = substr($myconfig{numberformat},-3,1);
   for $i (1 .. $numrows) {
     if ($spc eq '.') {
-      ($null, $dec) = split /\./, $form->{"sellprice_$i"};
+      (undef, $dec) = split /\./, $form->{"sellprice_$i"};
     } else {
-      ($null, $dec) = split /,/, $form->{"sellprice_$i"};
+      (undef, $dec) = split /,/, $form->{"sellprice_$i"};
     }
     $dec = length $dec;
     $decimalplaces = ($dec > $form->{precision}) ? $dec : $form->{precision};
@@ -297,6 +298,14 @@ sub display_row {
                 <b>$poxrefnumber</b>
 		<input name="customerponumber_$i" value="$form->{"customerponumber_$i"}">&nbsp;<a href=oe.pl?action=lookup_order&ordnumber=|.$form->escape($form->{"customerponumber_$i"},1).qq|&vc=vendor&type=purchase_order&pickvar=customerponumber_$i&path=$form->{path}&login=$form->{login} target=popup>?</a>
 |;
+
+      $serial = qq|
+                <td colspan=6><b>$serialnumber</b>
+                <input name="serialnumber_$i" value="|.$form->quote($form->{"serialnumber_$i"}).qq|"><br>|;
+                
+#                <b>$batchnumber</b>
+#                <input name="batchnumber_$i" value="|.$form->quote($form->{"batchnumber_$i"}).qq|"></td>|;
+
     }
 
     $costprice = "";
@@ -337,10 +346,6 @@ sub display_row {
     
     $form->{"itemnotes_$i"} = $form->quote($form->{"itemnotes_$i"});
     $itemnotes = qq|<td><textarea name="itemnotes_$i" rows=$rows cols=46 wrap=soft>$form->{"itemnotes_$i"}</textarea></td>|;
-
-    $serial = qq|
-                <td colspan=6><b>$serialnumber</b>
-                <input name="serialnumber_$i" value="|.$form->quote($form->{"serialnumber_$i"}).qq|"></td>| if $form->{type} !~ /_quotation/;
 
     $package = qq|
                 <tr>
@@ -710,7 +715,7 @@ sub new_item {
   for (qw(partnumber description)) { $form->{$_} = $form->{"${_}_$i"} }
   $form->hide_form(qw(partnumber description previousform rowcount path login));
 
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
   
   print qq|
 </form>
@@ -980,9 +985,9 @@ sub invoicetotal {
     
     $spc = substr($myconfig{numberformat},-3,1);
     if ($spc eq '.') {
-      ($null, $dec) = split /\./, $form->{"sellprice_$i"};
+      (undef, $dec) = split /\./, $form->{"sellprice_$i"};
     } else {
-      ($null, $dec) = split /,/, $form->{"sellprice_$i"};
+      (undef, $dec) = split /,/, $form->{"sellprice_$i"};
     }
     $dec = length $dec;
     $decimalplaces = ($dec > $form->{precision}) ? $dec : $form->{precision};
@@ -1044,6 +1049,12 @@ sub validate_items {
       $form->error($locale->text('Same kit in Row') . " $i") if $samekit{$form->{"id_$i"}};
       $samekit{$form->{"id_$i"}} = 1;
     }
+
+    if ($form->{"assembly_$i"}) {
+      if (($form->{type} =~ /invoice/ && $form->{"qty_$i"} < 0) || $form->{type} eq 'credit_invoice') {
+        $form->error($locale->text('Cannot return assembly!'));
+      }
+    }
   }
 
 }
@@ -1061,22 +1072,39 @@ sub purchase_order {
   $form->{type} = 'purchase_order';
   $form->{formname} = 'purchase_order';
 
+  # remove payment
+	for $i (1 .. $form->{paidaccounts}) {
+		for (qw(olddatepaid cleared vr_id source memo paid exchangerate paymentmethod AP_paid)) { delete $form->{"${_}_$i"} }
+	}
+
+
   &create_form;
 
 }
 
  
 sub sales_order {
-  
+
   if ($form->{type} eq 'sales_quotation') {
     $form->{closed} = 1;
     OE->save(\%myconfig, \%$form);
+    # format amounts
+    for $i (1 .. $form->{rowcount}) {
+      for (qw(qty discount sellprice cost netweight grossweight volume)) {
+        $form->{"${_}_$i"} = $form->format_amount(\%myconfig, $form->{"${_}_$i"});
+      }
+    }
   }
 
   $form->{title} = $locale->text('Add Sales Order');
   $form->{vc} = 'customer';
   $form->{type} = 'sales_order';
   $form->{formname} = 'sales_order';
+
+  # remove payment
+	for $i (1 .. $form->{paidaccounts}) {
+		for (qw(olddatepaid cleared vr_id source memo paid exchangerate paymentmethod AR_paid)) { delete $form->{"${_}_$i"} }
+	}
 
   &create_form;
 
@@ -1721,11 +1749,6 @@ sub print_form {
 
   $form->format_string(@f);
 
-  my $i = 10;
-  for (reverse split //, 100 * $form->parse_amount(\%myconfig, $form->{total})) {
-    $form->{'total'.$i--} = $_;
-  }
-
   $form->{templates} = "$templates/$myconfig{dbname}";
   $form->{IN} = "$form->{formname}.$form->{format}";
 
@@ -1852,7 +1875,7 @@ sub print_form {
 
   $form->format_string(qw(email cc bcc));
 
-  $form->parse_template(\%myconfig, $userspath, $dvipdf) if $form->{copies};
+  $form->parse_template(\%myconfig, $userspath, $dvipdf, $xelatex) if $form->{copies};
 
 
   # if we got back here restore the previous form

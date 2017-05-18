@@ -26,7 +26,6 @@ sub new {
   }
 
   my $data;
-  my $null;
   my $esc = 1;
 
   my $windows = ($^O =~ /mswin/i);
@@ -38,7 +37,7 @@ sub new {
   my ($content, $boundary) = split /; /, $ENV{CONTENT_TYPE};
 
   if ($boundary) {
-    ($null, $boundary) = split /=/, $boundary;
+    (undef, $boundary) = split /=/, $boundary;
 
     $esc = 0;
     %$self = ();
@@ -50,36 +49,35 @@ sub new {
 
       last if $line =~ /${boundary}--/;
       if ($line =~ /${boundary}/) {
-	next;
+        next;
       }
 
       if ($line =~ /Content-Disposition: form-data;/) {
 
-	my @b = split /; /, $line;
-	my @c = split /=/, $b[1];
-	$c[1] =~ s/"//g;
-	$var = $c[1];
+        my @b = split /; /, $line;
+        my @c = split /=/, $b[1];
+        $c[1] =~ s/"//g;
+        $var = $c[1];
 
-	if ($b[2]) {
-	  @c = split /=/, $b[2];
-	  $c[1] =~ s/"//g;
-	  $self->{$c[0]} = $c[1];
-	}
-	next;
+        if ($b[2]) {
+          @c = split /=/, $b[2];
+          $c[1] =~ s/"//g;
+          $self->{$c[0]} = $c[1];
+        }
+        next;
       }
       if ($line =~ /Content-Type:/) {
-	($null, $self->{"contenttype"}) = split /: /, $line;
-	$data = $var;
-	next;
+        (undef, $self->{"contenttype"}) = split /: /, $line;
+        $data = $var;
+        next;
       }
 
       if ($self->{$var}) {
-	$self->{$var} .= "\r\n$line";
+        $self->{$var} .= "\r\n$line";
       } else {
-	chomp $line;
-	$self->{$var} = "$line";
+        chomp $line;
+        $self->{$var} = "$line";
       }
-      
     }
     
     if ($data) {
@@ -87,14 +85,14 @@ sub new {
       $self->{tmpfile} .= $$;
       my (@e) = split /\./, $self->{filename};
       if ($#e >= 1) {
-	$self->{tmpfile} .= ".$e[$#e]";
+        $self->{tmpfile} .= ".$e[$#e]";
       }
       if (! open(FH, ">$userspath/$self->{tmpfile}")) {
-	if ($ENV{HTTP_USER_AGENT}) {
-	  print "Content-Type: text/html\n\n";
-	}
-	print "$userspath/$self->{tmpfile} : $!";
-	die;
+        if ($ENV{HTTP_USER_AGENT}) {
+          print "Content-Type: text/html\n\n";
+        }
+        print "$userspath/$self->{tmpfile} : $!";
+        die;
       }
       print FH $self->{$data};
       close(FH);
@@ -123,10 +121,8 @@ sub new {
 
   $self->{menubar} = 1 if $self->{path} =~ /lynx/i;
 
-  $self->{version} = "3.2.0";
-  $self->{dbversion} = "3.2.0";
-
-  $self->{favicon} = 'favicon.ico';
+  $self->{version} = "3.2.5";
+  $self->{dbversion} = "3.2.1";
 
   bless $self, $type;
   
@@ -415,6 +411,8 @@ sub numtextrows {
 
   my $rows = 0;
 
+  $str =~ s/<br>/\n/g;
+
   for (split /\n/, $str) { $rows += int (((length) - 2)/$cols) + 1 }
   $maxrows = $rows unless defined $maxrows;
 
@@ -474,7 +472,6 @@ sub header {
   <title>$self->{titlebar}</title>
   <META NAME="robots" CONTENT="noindex,nofollow" />
   $favicon
-  $self->{customheader}
   $stylesheet
   $charset
 </head>
@@ -703,13 +700,13 @@ sub round_amount {
   
   my $neg = ($amount < 0) ? -1 : 1;
 
-  return int(($amount * (10**$places)) + ($neg * 0.5)) / (10**$places);
+  return int(($amount * (10**$places)) + ($neg * 0.501)) / (10**$places);
 
 }
 
 
 sub parse_template {
-  my ($self, $myconfig, $userspath, $dvipdf) = @_;
+  my ($self, $myconfig, $userspath, $dvipdf, $xelatex) = @_;
   
   my $err;
   my $ok;
@@ -761,7 +758,7 @@ sub parse_template {
       if ($i == 1) {
 	@_ = ();
 	while ($_ = shift @template) {
-	  if (/\\end{document}/) {
+	  if (/\\end\{document\}/) {
 	    push @_, qq|\\newpage\n|;
 	    last;
 	  }
@@ -772,12 +769,12 @@ sub parse_template {
 
       if ($i == 2) {
 	while ($_ = shift @template) {
-	  last if /\\begin{document}/;
+	  last if /\\begin\{document\}/;
 	}
       }
 
       if ($i == $self->{copies}) {
-	push @template, q|\end{document}|;
+	push @template, q|\end\{document\}|;
       }
     }
 
@@ -790,14 +787,14 @@ sub parse_template {
 
   # Convert the tex file to postscript
   if ($self->{format} =~ /(ps|pdf)/) {
-    $self->run_latex($userspath, $dvipdf);
+    $self->run_latex($userspath, $dvipdf, $xelatex);
     if (-f "$self->{errfile}") {
       my @err;
       open(FH, "$self->{errfile}");
       @err = <FH>;
       close(FH);
       for (@err) {
-	$self->error("@err") if /LaTeX Error:/;
+        $self->error("@err") if /LaTeX Error:/;
       }
     }
   }
@@ -811,8 +808,9 @@ sub parse_template {
       my $mail = new Mailer;
 
       for (qw(email cc bcc)) { $self->{$_} =~ s/(\\|\&gt;|\&lt;|<|>)//g; }
-      for (qw(cc bcc subject message version format charset notify)) { $mail->{$_} = $self->{$_} }
-      $mail->{to} = qq|$self->{email}|;
+      for (qw(cc bcc subject message version format notify)) { $mail->{$_} = $self->{$_} }
+      $mail->{charset} = $self->{charset};
+      $mail->{to} = $self->{email};
       $mail->{from} = qq|"$myconfig->{name}" <$myconfig->{email}>|;
       $mail->{fileid} = "${fileid}.";
 
@@ -902,7 +900,6 @@ sub process_template {
       chomp;
       s/.*?<%foreach\s+?(.+?)%>/$1/;
       $var = $1;
-
       while ($_ = shift) {
 	last if /<%end\s+?\Q$var\E%>/;
 	
@@ -996,7 +993,7 @@ sub process_template {
       chomp;
       s/.*?<%else\s+?(.+?)%>/$1/;
       $var = $1;
-      
+
       if (! $self->{$var}) {
 	s/^$var//;
 	if (/<%end /) {
@@ -1178,7 +1175,7 @@ sub process_template {
 
 
 sub run_latex {
-  my ($self, $userspath, $dvipdf) = @_;
+  my ($self, $userspath, $dvipdf, $xelatex) = @_;
 
   use Cwd;
   $self->{cwd} = cwd();
@@ -1220,8 +1217,8 @@ sub run_latex {
     if ($dvipdf) {
       system("latex --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
       while ($self->rerun_latex) {
-	system("latex --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
-	last if ++$r > 4;
+        system("latex --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
+        last if ++$r > 4;
       }
       $self->{tmpfile} =~ s/tex$/dvi/;
       $self->error($self->cleanup) if ! (-f $self->{tmpfile});
@@ -1231,10 +1228,11 @@ sub run_latex {
       $self->{tmpfile} =~ s/dvi$/pdf/;
       
     } else {
-      system("pdflatex --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
+      $lt = ($xelatex) ? "xelatex" : "pdflatex";
+      system("$lt --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
       while ($self->rerun_latex) {
-	system("pdflatex --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
-	last if ++$r > 4;
+        system("$lt --interaction=nonstopmode $self->{tmpfile} > $self->{errfile}");
+        last if ++$r > 4;
       }
       $self->error($self->cleanup) if ! (-f $self->{tmpfile});
       $self->{tmpfile} =~ s/tex$/pdf/;
@@ -1246,7 +1244,7 @@ sub run_latex {
 
 
 sub gentex {
-  my ($self, $myconfig, $templates, $userspath, $dvipdf, $column, $hdr) = @_;
+  my ($self, $myconfig, $templates, $userspath, $dvipdf, $xelatex, $column, $hdr) = @_;
 
   my $fileid = time;
   $fileid .= $$;
@@ -1266,7 +1264,7 @@ sub gentex {
       close(INC);
       next;
     }
-    last if $_ =~ /begin{document}/;
+    last if $_ =~ /begin\{document\}/;
     push @h, $_;
   }
   
@@ -1352,7 +1350,7 @@ sub gentex {
 
   close(OUT);
 
-  $self->run_latex($userspath, $dvipdf);
+  $self->run_latex($userspath, $dvipdf, $xelatex);
 
   $self->process_tex($self->{OUT});
 
@@ -1450,7 +1448,6 @@ sub format_line {
 
     if ($var =~ /\s/) {
       $str = "";
-      
       @kw = split / /, $var, 3;
       if ($var =~ /^if\s+?not /) {
 	$kw[1] = $kw[2];
@@ -2146,12 +2143,14 @@ sub valid_date {
 
 
 sub print_button {
-  my ($self, $button, $name) = @_;
+  my ($self, $button) = @_;
 
-  print qq|<input class=submit type=submit name=action value="$button->{$name}{value}" accesskey="$button->{$name}{key}" title="$button->{$name}{value} [$button->{$name}{key}]">\n|;
+  for (sort { $button->{$a}->{ndx} <=> $button->{$b}->{ndx} } keys %{$button}) {
+    print qq|<input class=submit type=submit name=action value="$button->{$_}{value}" accesskey="$button->{$_}{key}" title="$button->{$_}{value} [$button->{$_}{key}]">\n|;
+  }
 
 }
-  
+
 
 # Database routines used throughout
 
@@ -2159,7 +2158,7 @@ sub dbconnect {
   my ($self, $myconfig) = @_;
 
   # connect to database
-  my $dbh = DBI->connect($myconfig->{dbconnect}, $myconfig->{dbuser}, $myconfig->{dbpasswd}, {AutoCommit => 1, pg_enable_utf8 => 0}) or $self->dberror;
+  my $dbh = DBI->connect($myconfig->{dbconnect}, $myconfig->{dbuser}, $myconfig->{dbpasswd}, {AutoCommit => 1}) or $self->dberror;
 
   # set db options
   if ($myconfig->{dboptions}) {
@@ -2175,7 +2174,7 @@ sub dbconnect_noauto {
   my ($self, $myconfig) = @_;
 
   # connect to database
-  my $dbh = DBI->connect($myconfig->{dbconnect}, $myconfig->{dbuser}, $myconfig->{dbpasswd}, {AutoCommit => 0, pg_enable_utf8 => 0}) or $self->dberror;
+  my $dbh = DBI->connect($myconfig->{dbconnect}, $myconfig->{dbuser}, $myconfig->{dbpasswd}, {AutoCommit => 0}) or $self->dberror;
 
   # set db options
   if ($myconfig->{dboptions}) {
@@ -2231,8 +2230,8 @@ sub update_exchangerate {
 
   my $query = qq|SELECT curr FROM exchangerate
                  WHERE curr = '$curr'
-	         AND transdate = '$transdate'
-		 FOR UPDATE|;
+                 AND transdate = '$transdate'
+                 FOR UPDATE|;
   my $sth = $dbh->prepare($query);
   $sth->execute || $self->dberror($query);
   
@@ -2241,8 +2240,8 @@ sub update_exchangerate {
   if ($sth->fetchrow_array) {
     $query = qq|UPDATE exchangerate
                 SET exchangerate = $exchangerate
-		WHERE curr = '$curr'
-		AND transdate = '$transdate'|;
+                WHERE curr = '$curr'
+                AND transdate = '$transdate'|;
   } else {
     $query = qq|INSERT INTO exchangerate (curr, exchangerate, transdate)
                 VALUES ('$curr', $exchangerate, '$transdate')|;
@@ -2269,10 +2268,11 @@ sub save_exchangerate {
 sub get_exchangerate {
   my ($self, $myconfig, $dbh, $curr, $transdate) = @_;
   
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
 
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
   }
   
   my $exchangerate;
@@ -2346,7 +2346,7 @@ sub exchangerate_defaults {
       $eth2->execute($var);
 
       ($self->{$var}) = $eth2->fetchrow_array;
-      ($null, $self->{$var}) = split / /, $self->{$var};
+      (undef, $self->{$var}) = split / /, $self->{$var};
       $self->{$var} = 1 unless $self->{$var};
       $eth2->finish;
     }
@@ -2516,7 +2516,7 @@ sub get_name {
 sub get_currencies {
   my ($self, $myconfig, $dbh) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
@@ -2552,7 +2552,7 @@ sub get_currencies {
 sub get_onhand {
   my ($self, $myconfig, $dbh) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
@@ -2618,7 +2618,7 @@ sub all_vc {
   my ($self, $myconfig, $vc, $module, $dbh, $transdate, $job, $openinv, $openord) = @_;
   
   my $ref;
-  my $disconnect = 0;
+  my $disconnect;
   
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
@@ -2701,10 +2701,11 @@ sub all_vc {
 sub all_languages {
   my ($self, $myconfig, $dbh) = @_;
   
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
 
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
   }
   my $sth;
   my $query;
@@ -2729,10 +2730,11 @@ sub all_languages {
 sub all_taxaccounts {
   my ($self, $myconfig, $dbh, $transdate) = @_;
   
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
 
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
   }
   my $sth;
   my $query;
@@ -2767,10 +2769,11 @@ sub all_taxaccounts {
 sub all_employees {
   my ($self, $myconfig, $dbh, $transdate, $sales) = @_;
   
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
 
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
   }
  
   # setup employees/sales contacts
@@ -2808,17 +2811,18 @@ sub all_employees {
 sub all_projects {
   my ($self, $myconfig, $dbh, $transdate, $job) = @_;
 
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
 
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
   }
   
-  my $where = "1 = 1";
+  my $where = "pr.parts_id = 0 OR pr.parts_id IS NULL";
 
-  $where = qq|id NOT IN (SELECT id
+  $where = qq|pr.id NOT IN (SELECT DISTINCT id
                          FROM parts
-			 WHERE project_id > 0)| if ! $job;
+			 WHERE project_id > 0)| if $job;
 			 
   my $query = qq|SELECT *
                  FROM project pr
@@ -2856,7 +2860,7 @@ sub all_projects {
 sub all_departments {
   my ($self, $myconfig, $dbh, $vc) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
     $disconnect = 1;
@@ -2895,7 +2899,7 @@ sub all_departments {
 sub all_warehouses {
   my ($self, $myconfig, $dbh) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
     $disconnect = 1;
@@ -2921,7 +2925,7 @@ sub all_warehouses {
 sub all_roles {
   my ($self, $myconfig, $dbh) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
     $disconnect = 1;
@@ -2947,7 +2951,7 @@ sub all_roles {
 sub all_years {
   my ($self, $myconfig, $dbh) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
     $disconnect = 1;
@@ -2998,6 +3002,65 @@ sub all_years {
   
   $dbh->disconnect if $disconnect;
   
+}
+
+
+sub all_countries {
+  my ($self, $myconfig, $db, $dbh) = @_;
+  
+  my $disconnect;
+
+  if (! $dbh) {
+    $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
+  }
+  my $sth;
+  my $query;
+
+  $query = qq|SELECT DISTINCT country
+              FROM address a
+              JOIN $db vc ON (vc.id = a.trans_id)
+              WHERE country != ''
+	      ORDER BY 1|;
+  $sth = $dbh->prepare($query);
+  $sth->execute || $self->dberror($query);
+
+  $self->{all_countries} = ();
+  while ($ref = $sth->fetchrow_hashref(NAME_lc)) {
+    push @{ $self->{all_countries} }, $ref;
+  }
+  $sth->finish;
+
+  $dbh->disconnect if $disconnect;
+
+}
+
+
+sub all_business {
+  my ($self, $myconfig, $dbh) = @_;
+
+  my $disconnect;
+
+  if (! $dbh) {
+    $dbh = $self->dbconnect($myconfig);
+    $disconnect = 1;
+  }
+  my $sth;
+  my $query;
+
+  $query = qq|SELECT *
+              FROM business
+              ORDER BY rn|;
+  $sth = $dbh->prepare($query);
+  $sth->execute || $self->dberror($query);
+
+  while ($ref = $sth->fetchrow_hashref(NAME_lc)) {
+    push @{ $self->{all_business} }, $ref;
+  }
+  $sth->finish;
+
+  $dbh->disconnect if $disconnect;
+
 }
 
 
@@ -3224,10 +3287,12 @@ sub get_peripherals {
 
   my @df = map { "${_}_$self->{workstation}" } qw(workstation cashdrawer poledisplay poledisplayon);
   push @df, "printer_$self->{workstation}_%";
+  push @df, "printer_$self->{login}_%";
   my %defaults = $self->get_defaults($dbh, \@df);
-    
+
   my $label;
   my $command;
+  my %printer;
 
   @{ $self->{all_printer} } = ();
 
@@ -3235,7 +3300,10 @@ sub get_peripherals {
     for (sort keys %defaults) {
       if ($_ =~ /printer_/) {
 	($label, $command) = split /=/, $defaults{$_};
-	push @{ $self->{all_printer} }, { printer => $label, command => $command };
+        unless ($printer{$label}) {
+          push @{ $self->{all_printer} }, { printer => $label, command => $command };
+        }
+        $printer{$label} = 1;
       } else {
 	$label = $_;
 	$label =~ s/_.*//;
@@ -3249,7 +3317,10 @@ sub get_peripherals {
     for (sort keys %defaults) {
       if ($_ =~ /printer_\d+$/) {
 	($label, $command) = split /=/, $defaults{$_};
-	push @{ $self->{all_printer} }, { printer => $label, command => $command };
+        unless ($printer{$label}) {
+          push @{ $self->{all_printer} }, { printer => $label, command => $command };
+        }
+        $printer{$label} = 1;
       } else {
 	if ($_ !~ /printer_/) {
 	  $self->{$_} = $defaults{$_};
@@ -3267,7 +3338,7 @@ sub create_lock {
 
   my $query;
   
-  my $disconnect = 0;
+  my $disconnect;
   my $expires = time;
   
   
@@ -3310,7 +3381,7 @@ sub create_lock {
 sub remove_locks {
   my ($self, $myconfig, $dbh, $module) = @_;
   
-  my $disconnect = 0;
+  my $disconnect;
   if (! $dbh) {
     $dbh = $self->dbconnect($myconfig);
     $disconnect = 1;
@@ -4096,7 +4167,7 @@ sub get_recurring {
 sub save_recurring {
   my ($self, $dbh, $myconfig) = @_;
 
-  my $disconnect = 0;
+  my $disconnect;
   if (! $dbh) {
     $dbh = $self->dbconnect_noauto($myconfig);
     $disconnect = 1;
@@ -4259,10 +4330,11 @@ sub save_intnotes {
 sub update_defaults {
   my ($self, $myconfig, $fld, $dbh, $ini) = @_;
 
-  my $disconnect = ($dbh) ? 0 : 1;
+  my $disconnect;
   
   if (! $dbh) {
     $dbh = $self->dbconnect_noauto($myconfig);
+    $disconnect = 1;
   }
   
   my $query = qq|SELECT fldname FROM defaults
@@ -4378,6 +4450,10 @@ sub update_defaults {
 	  my @p = ();
 
 	  my @date = $self->split_date($myconfig->{dateformat}, $self->{transdate});
+          if ($p =~ /yyyy/i) {
+            $date[1] += 2000;
+          }
+
 	  for (sort keys %d) {
             push @p, $date[$d{$_}] if ($p =~ /$_/i);
             }
@@ -5048,55 +5124,56 @@ sub audittrail {
     my %defaults = $self->get_defaults($dbh, \@{['audittrail']});
     
     if ($defaults{audittrail}) {
-      my ($null, $employee_id) = $self->get_employee($dbh);
+      my $employee_id;
+      (undef, $employee_id) = $self->get_employee($dbh);
 
       if ($self->{audittrail} && !$myconfig) {
-	chop $self->{audittrail};
-	
-	my @at = split /\|/, $self->{audittrail};
-	my %newtrail = ();
-	my $key;
-	my $i;
-	my @flds = qw(tablename reference formname action transdate);
+        chop $self->{audittrail};
+        
+        my @at = split /\|/, $self->{audittrail};
+        my %newtrail = ();
+        my $key;
+        my $i;
+        my @flds = qw(tablename reference formname action transdate);
 
-	# put into hash and remove dups
-	while (@at) {
-	  $key = "$at[2]$at[3]";
-	  $i = 0;
-	  $newtrail{$key} = { map { $_ => $at[$i++] } @flds };
-	  splice @at, 0, 5;
-	}
-	
-	$query = qq|INSERT INTO audittrail (trans_id, tablename, reference,
-		    formname, action, employee_id, transdate)
-	            VALUES ($audittrail->{id}, ?, ?,
-		    ?, ?, $employee_id, ?)|;
-	my $sth = $dbh->prepare($query) || $self->dberror($query);
+        # put into hash and remove dups
+        while (@at) {
+          $key = "$at[2]$at[3]";
+          $i = 0;
+          $newtrail{$key} = { map { $_ => $at[$i++] } @flds };
+          splice @at, 0, 5;
+        }
+        
+        $query = qq|INSERT INTO audittrail (trans_id, tablename, reference,
+                    formname, action, employee_id, transdate)
+                    VALUES ($audittrail->{id}, ?, ?,
+                    ?, ?, $employee_id, ?)|;
+        my $sth = $dbh->prepare($query) || $self->dberror($query);
 
-	foreach $key (sort { $newtrail{$a}{transdate} cmp $newtrail{$b}{transdate} } keys %newtrail) {
-	  $i = 1;
-	  for (@flds) { $sth->bind_param($i++, $newtrail{$key}{$_}) }
+        foreach $key (sort { $newtrail{$a}{transdate} cmp $newtrail{$b}{transdate} } keys %newtrail) {
+          $i = 1;
+          for (@flds) { $sth->bind_param($i++, $newtrail{$key}{$_}) }
 
-	  $sth->execute || $self->dberror;
-	  $sth->finish;
-	}
+          $sth->execute || $self->dberror;
+          $sth->finish;
+        }
       }
 
      
       if ($audittrail->{transdate}) {
-	$query = qq|INSERT INTO audittrail (trans_id, tablename, reference,
-		    formname, action, employee_id, transdate) VALUES (
-		    $audittrail->{id}, '$audittrail->{tablename}', |
-		    .$dbh->quote($audittrail->{reference}).qq|',
-		    '$audittrail->{formname}', '$audittrail->{action}',
-		    $employee_id, '$audittrail->{transdate}')|;
+        $query = qq|INSERT INTO audittrail (trans_id, tablename, reference,
+                    formname, action, employee_id, transdate) VALUES (
+                    $audittrail->{id}, '$audittrail->{tablename}', |
+                    .$dbh->quote($audittrail->{reference}).qq|',
+                    '$audittrail->{formname}', '$audittrail->{action}',
+                    $employee_id, '$audittrail->{transdate}')|;
       } else {
-	$query = qq|INSERT INTO audittrail (trans_id, tablename, reference,
-		    formname, action, employee_id) VALUES ($audittrail->{id},
-		    '$audittrail->{tablename}', |
-		    .$dbh->quote($audittrail->{reference}).qq|,
-		    '$audittrail->{formname}', '$audittrail->{action}',
-		    $employee_id)|;
+        $query = qq|INSERT INTO audittrail (trans_id, tablename, reference,
+                    formname, action, employee_id) VALUES ($audittrail->{id},
+                    '$audittrail->{tablename}', |
+                    .$dbh->quote($audittrail->{reference}).qq|,
+                    '$audittrail->{formname}', '$audittrail->{action}',
+                    $employee_id)|;
       }
       $dbh->do($query);
     }
@@ -5130,7 +5207,6 @@ sub new {
   }
 
   $self->{NLS_file} = $NLS_file;
-  $self->{charset} = $self{charset};
   
   push @{ $self->{LONG_MONTH} }, ("January", "February", "March", "April", "May ", "June", "July", "August", "September", "October", "November", "December");
   push @{ $self->{SHORT_MONTH} }, (qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec));

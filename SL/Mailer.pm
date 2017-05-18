@@ -30,7 +30,13 @@ sub send {
   my $msgid = "$boundary\@$domain";
   $boundary = "SL-$self->{version}-$boundary";
   
-  $self->{charset} ||= "ISO-8859-1";
+  $self->{charset} ||= "UTF8";
+
+  if ($out) {
+    open(OUT, $out) or return "$out : $!";
+  } else {
+    open(OUT, ">-") or return "STDOUT : $!";
+  }
 
   $self->{contenttype} ||= "text/plain";
   
@@ -54,17 +60,7 @@ sub send {
       $h{notify} = "Disposition-Notification-To: $h{from}\n";
     }
   }
-
-  if ($out) {
-    $self->{from} =~ /<(.*)>/;
-    my $envelope = $1;
-    $envelope =~ s/@/%/;
-    $out =~ s/<%from%>/$envelope/;
-    open(OUT, $out) or return "$out : $!";
-  } else {
-    open(OUT, ">-") or return "STDOUT : $!";
-  }
-
+  
   print OUT qq|From: $h{from}
 To: $h{to}
 $h{cc}$h{bcc}$h{subject}

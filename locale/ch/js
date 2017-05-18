@@ -1,5 +1,3 @@
-$self{charset} = 'ISO-8859-1';
-
 $self{texts} = {
   'April'                       => 'April',
   'August'                      => 'August',
@@ -8,7 +6,7 @@ $self{texts} = {
   'January'                     => 'Januar',
   'July'                        => 'Juli',
   'June'                        => 'Juni',
-  'March'                       => 'März',
+  'March'                       => 'MÃ¤rz',
   'May'                         => 'Mai',
   'November'                    => 'November',
   'October'                     => 'Oktober',

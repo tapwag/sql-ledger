@@ -195,7 +195,7 @@ sub display_form {
   
   $form->{allbox} = ($form->{allbox}) ? "checked" : "";
   $action = ($form->{deselect}) ? "deselect_all" : "select_all";
-  $column_header{cleared} = qq|<th class=listheading width=1%><input name="allbox" type=checkbox class=checkbox value="1" $form->{allbox} onChange="CheckAll(); javascript:document.forms[0].submit()"><input type=hidden name=action value="$action"></th>|;
+  $column_header{cleared} = qq|<th class=listheading width=1%><input name="allbox" type=checkbox class=checkbox value="1" $form->{allbox} onChange="CheckAll(); javascript:document.main.submit()"><input type=hidden name=action value="$action"></th>|;
   $column_header{source} = "<th class=listheading>".$locale->text('Source')."</a></th>";
   $column_header{name} = "<th class=listheading>".$locale->text('Description')."</a></th>";
   $column_header{transdate} = "<th class=listheading>".$locale->text('Date')."</a></th>";
@@ -224,7 +224,7 @@ sub display_form {
   print qq|
 <body>
 
-<form method=post action=$form->{script}>
+<form method=post name=main action=$form->{script}>
 
 <table width=100%>
   <tr>
@@ -460,7 +460,7 @@ sub display_form {
       delete $button{'Deselect all'};
     }
   
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+    $form->print_button(\%button);
   
   }
 
@@ -490,6 +490,8 @@ sub update {
     $ref->{cleared} = ($form->{"cleared_$i"}) ? $cleared : "";
   }
 
+  $form->{deselect} = 1 if $form->{allbox};
+
   &display_form;
   
 }
@@ -517,7 +519,7 @@ sub deselect_all {
 
   for (@{ $form->{PR} }) { $_->{cleared} = "" }
 
-  $form->{allbox} = 0;
+  $form->{allbox} = "";
 
   &display_form;
   

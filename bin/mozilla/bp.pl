@@ -115,13 +115,13 @@ sub search {
   
   $label{print}{title} = "Print";
   $label{queue}{title} = "Queued";
-  $label{email}{title} = "E-Mail";
+  $label{email}{title} = "E-mail";
 
   $checked{$form->{batch}} = "checked";
 
 # $locale->text('Print')
 # $locale->text('Queued')
-# $locale->text('E-Mail')
+# $locale->text('E-mail')
 
   $form->{title} = $locale->text($label{$form->{batch}}{title})." ".$locale->text($label{$form->{type}}{title});
 
@@ -240,15 +240,6 @@ sub search {
 	    for (@{ $form->{all_paymentmethod} }) { $paymentmethod .= qq|<option value="$_->{description}--$_->{id}">$_->{description}\n| }
 	    $paymentmethod .= qq|</select></tr>|;
     }
-    if ($form->{batch} eq 'print') {
-      $datepaid = qq|
-  <tr>
-    <th align=right nowrap>|.$locale->text('Paid').' '.$locale->text('From').qq|</th>
-    <td><input name=datepaidfrom size=11 class=date title="$myconfig{dateformat}">
-    <b>|.$locale->text('To').qq|</b>
-    <input name=datepaidto size=11 class=date title="$myconfig{dateformat}"></td>
-  </tr>|;
-    }
   }
  
   # accounting years
@@ -317,7 +308,6 @@ sub search {
 	  <b>|.$locale->text('To').qq|</b>
 	  <input name=transdateto size=11 class=date title="$myconfig{dateformat}">|.&js_calendar("main", "transdateto").qq|</td>
 	</tr>
-	$datepaid
 	$selectfrom
 	$openclosed
       </table>
@@ -502,6 +492,8 @@ sub print {
 
         $myform->{description} = $form->{description};
 
+        $form->fdld(\%myconfig, \%$locale);
+
         &print_form;
 
         $myform->info(qq|${r}. $msg{$myform->{batch}} ... $myform->{"reference_$i"}|);
@@ -621,18 +613,6 @@ sub list_spool {
     $option .= "\n<br>" if ($option);
     $option .= $locale->text('To')."&nbsp;".$locale->date(\%myconfig, $form->{transdateto}, 1);
   }
-  if ($form->{datepaidfrom}) {
-    $callback .= "&datepaidfrom=$form->{datepaidfrom}";
-    $href .= "&datepaidfrom=$form->{datepaidfrom}";
-    $option .= "\n<br>" if ($option);
-    $option .= $locale->text('Paid').' '.$locale->text('From')."&nbsp;".$locale->date(\%myconfig, $form->{datepaidfrom}, 1);
-  }
-  if ($form->{datepaidto}) {
-    $callback .= "&datepaidto=$form->{datepaidto}";
-    $href .= "&datepaidto=$form->{datepaidto}";
-    $option .= "\n<br>" if ($option);
-    $option .= $locale->text('Paid').' '.$locale->text('To')."&nbsp;".$locale->date(\%myconfig, $form->{datepaidto}, 1);
-  }
   if ($form->{open}) {
     $callback .= "&open=$form->{open}";
     $href .= "&open=$form->{open}";
@@ -702,7 +682,7 @@ sub list_spool {
   $column_header{runningnumber} = "<th><a class=listheading>&nbsp;</th>";
   $form->{allbox} = ($form->{allbox}) ? "checked" : "";
   $action = ($form->{deselect}) ? "deselect_all" : "select_all";
-  $column_header{ndx} = qq|<th class=listheading width=1%><input name="allbox" type=checkbox class=checkbox value="1" $form->{allbox} onChange="CheckAll(); Javascript:document.forms[0].submit()"><input type=hidden name=action value="$action"></th>|;
+  $column_header{ndx} = qq|<th class=listheading width=1%><input name="allbox" type=checkbox class=checkbox value="1" $form->{allbox} onChange="CheckAll(); Javascript:document.main.submit()"><input type=hidden name=action value="$action"></th>|;
   $column_header{transdate} = "<th><a class=listheading href=$href&sort=transdate>".$locale->text('Date')."</a></th>";
   $column_header{invnumber} = "<th><a class=listheading href=$href&sort=invnumber>".$locale->text('Invoice')."</a></th>";
   $column_header{ordnumber} = "<th><a class=listheading href=$href&sort=ordnumber>".$locale->text('Order')."</a></th>";
@@ -857,7 +837,7 @@ print qq|
 <br>
 |;
 
-  $form->hide_form(qw(callback title type sort path login printcustomer printvendor customer customernumber vendor vendornumber employee employeenumber batch invnumber ordnumber quonumber description transdatefrom transdateto datepaidfrom datepaidto open closed onhold printed emailed notprinted notemailed precision));
+  $form->hide_form(qw(callback title type sort path login printcustomer printvendor customer customernumber vendor vendornumber employee employeenumber batch invnumber ordnumber quonumber description transdatefrom transdateto open closed onhold printed emailed notprinted notemailed precision));
 
   $form->{copies} ||= 1;
 
@@ -973,8 +953,11 @@ print qq|
     delete $button{'E-mail'};
     delete $button{'Print'} if ! @{ $form->{all_printer} };
   }
+  if (!$pdftk) {
+    delete $button{'Combine'};
+  }
 
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
     
 
   if ($form->{menubar}) {
@@ -1020,13 +1003,13 @@ sub combine {
   for (1 .. $form->{rowcount}) {
     if ($form->{"ndx_$_"}) {
       if ($form->{"spoolfile_$_"} =~ /\.pdf$/) {
-  $files .= qq|$form->{"spoolfile_$_"} |;
+        $files .= qq|$form->{"spoolfile_$_"} |;
       }
     }
   }
 
   $form->{format} = "pdf";
-  
+
   if ($files) {
     chdir("$spool/$myconfig{dbname}");
     if ($filename = BP->spoolfile(\%myconfig, \%$form)) {
@@ -1040,7 +1023,7 @@ sub combine {
   chdir("$dir");
 
   $form->redirect;
-  
+
 }
 
 

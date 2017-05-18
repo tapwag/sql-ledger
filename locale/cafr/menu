@@ -57,6 +57,7 @@ $self{texts} = {
   'Logout'                      => 'Déconnexion',
   'March'                       => 'Mars',
   'May'                         => 'Mai',
+  'New Window'                  => 'Nouvelle fenêtre',
   'Non-taxable'                 => 'Non imposable',
   'November'                    => 'Novembre',
   'October'                     => 'Octobre',

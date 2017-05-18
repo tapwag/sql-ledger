@@ -1,21 +1,17 @@
-$self{charset} = 'ISO-8859-1';
-
 $self{texts} = {
   'April'                       => 'April',
   'August'                      => 'August',
-  'Beginning date'              => 'Startdatum',
   'Continue'                    => 'Weiter',
-  'Date missing'                => 'Datum fehlt',
+  'Date missing!'               => 'Datum fehlt!',
   'December'                    => 'Dezember',
   'February'                    => 'Februar',
   'January'                     => 'Januar',
   'July'                        => 'Juli',
   'June'                        => 'Juni',
-  'March'                       => 'März',
+  'March'                       => 'MÃ¤rz',
   'May'                         => 'Mai',
   'November'                    => 'November',
   'October'                     => 'Oktober',
-  'Repost Invoices'             => 'Rechnungen neu buchen',
   'September'                   => 'September',
 };
 

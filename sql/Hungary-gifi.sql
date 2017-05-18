@@ -1,7 +1,4 @@
 --Hungarian GIFI / Magyar gyûjtõkódok -- amelyek csak példaként szolgálnak
---
-SET client_encoding = 'ISO-8859-10';
---
 INSERT INTO gifi (accno,description) VALUES ('114','Tárgyi eszközök');
 INSERT INTO gifi (accno,description) VALUES ('119','Tárgyi eszközök ÉCS');
 INSERT INTO gifi (accno,description) VALUES ('261','Áruk');

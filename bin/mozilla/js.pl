@@ -182,7 +182,7 @@ print q|
   // date parsing function
   function f_tcalParseDate (s_date) {|;
   
-if ($myconfig{dateformat} =~ /yy$/i) {
+if ($myconfig{dateformat} =~ /^mm/i) {
   print q|
     var re_date = /^\s*(\d{1,2})\W(\d{1,2})\W(\d{2,4})\s*$/;|
 }
@@ -336,6 +336,27 @@ function jsClock() {
 </script>
 |;
 
+}
+
+
+sub show_progress {
+
+print qq|
+<script type="text/javascript">
+
+var hideProgress = 0;
+
+function showProgress() {
+  if (hideProgress != 0) {
+    hideProgress = 0;
+  } else {
+    var progress = document.getElementById('progress');
+    progress.style.left = window.pageXOffset ? window.pageXOffset+'px' : document.body.scrollLeft+'px';
+    progress.style.top = window.pageYOffset ? window.pageYOffset+'px' : document.body.scrollTop+'px';
+    progress.style.display = 'block';
+  }
+}
+|;
 }
 
 1;

@@ -1,5 +1,5 @@
 $self{texts} = {
-  'AR/AP'                       => 'Intäkter/utgifter',
+  'AR/AP'                       => 'IntÃ¤kter/utgifter',
   'Account'                     => 'Konto',
   'Apr'                         => 'apr',
   'April'                       => 'april',
@@ -17,7 +17,7 @@ $self{texts} = {
   'Description'                 => 'Beskrivning',
   'Feb'                         => 'Feb',
   'February'                    => 'Februari',
-  'From'                        => 'Från',
+  'From'                        => 'FrÃ¥n',
   'GIFI'                        => 'SRU-kod',
   'Include in Report'           => 'Inkludera i rapport',
   'Jan'                         => 'Jan',
@@ -31,7 +31,7 @@ $self{texts} = {
   'March'                       => 'Mars',
   'May'                         => 'Maj',
   'May '                        => 'Maj',
-  'Month'                       => 'Månad',
+  'Month'                       => 'MÃ¥nad',
   'Nov'                         => 'Nov',
   'November'                    => 'November',
   'Oct'                         => 'Okt',
@@ -43,24 +43,17 @@ $self{texts} = {
   'Reference'                   => 'Referens',
   'Sep'                         => 'Sep',
   'September'                   => 'September',
-  'Source'                      => 'Källa',
+  'Source'                      => 'KÃ¤lla',
   'Subtotal'                    => 'Subtotal',
   'To'                          => 'Till',
-  'Year'                        => 'År',
+  'Year'                        => 'Ã…r',
 };
 
 $self{subs} = {
   'ca_subtotal'                 => 'ca_subtotal',
-  'calendar'                    => 'calendar',
-  'change_report'               => 'change_report',
   'chart_of_accounts'           => 'chart_of_accounts',
-  'check_all'                   => 'check_all',
-  'clock'                       => 'clock',
-  'js_calendar'                 => 'js_calendar',
   'list'                        => 'list',
   'list_transactions'           => 'list_transactions',
-  'pickvalue'                   => 'pickvalue',
-  'resize'                      => 'resize',
   'lista_transaktioner'         => 'list_transactions',
 };
 

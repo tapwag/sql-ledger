@@ -2,6 +2,7 @@ $self{texts} = {
   'April'                       => 'Avril',
   'August'                      => 'Août',
   'Continue'                    => 'Continuer',
+  'Date missing!'               => 'Date manquante!',
   'December'                    => 'Décembre',
   'February'                    => 'Février',
   'January'                     => 'Janvier',

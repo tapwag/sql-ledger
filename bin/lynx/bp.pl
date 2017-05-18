@@ -115,13 +115,13 @@ sub search {
   
   $label{print}{title} = "Print";
   $label{queue}{title} = "Queued";
-  $label{email}{title} = "E-Mail";
+  $label{email}{title} = "E-mail";
 
   $checked{$form->{batch}} = "checked";
 
 # $locale->text('Print')
 # $locale->text('Queued')
-# $locale->text('E-Mail')
+# $locale->text('E-mail')
 
   $form->{title} = $locale->text($label{$form->{batch}}{title})." ".$locale->text($label{$form->{type}}{title});
 
@@ -492,6 +492,8 @@ sub print {
 
         $myform->{description} = $form->{description};
 
+        $form->fdld(\%myconfig, \%$locale);
+
         &print_form;
 
         $myform->info(qq|${r}. $msg{$myform->{batch}} ... $myform->{"reference_$i"}|);
@@ -680,7 +682,7 @@ sub list_spool {
   $column_header{runningnumber} = "<th><a class=listheading>&nbsp;</th>";
   $form->{allbox} = ($form->{allbox}) ? "checked" : "";
   $action = ($form->{deselect}) ? "deselect_all" : "select_all";
-  $column_header{ndx} = qq|<th class=listheading width=1%><input name="allbox" type=checkbox class=checkbox value="1" $form->{allbox} onChange="CheckAll(); Javascript:document.forms[0].submit()"><input type=hidden name=action value="$action"></th>|;
+  $column_header{ndx} = qq|<th class=listheading width=1%><input name="allbox" type=checkbox class=checkbox value="1" $form->{allbox} onChange="CheckAll(); Javascript:document.main.submit()"><input type=hidden name=action value="$action"></th>|;
   $column_header{transdate} = "<th><a class=listheading href=$href&sort=transdate>".$locale->text('Date')."</a></th>";
   $column_header{invnumber} = "<th><a class=listheading href=$href&sort=invnumber>".$locale->text('Invoice')."</a></th>";
   $column_header{ordnumber} = "<th><a class=listheading href=$href&sort=ordnumber>".$locale->text('Order')."</a></th>";
@@ -926,6 +928,7 @@ print qq|
                'Deselect all' => { ndx => 3, key => 'A', value => $locale->text('Deselect all') },
                'Print' => { ndx => 5, key => 'P', value => $locale->text('Print') },
                'E-mail' => { ndx => 6, key => 'E', value => $locale->text('E-mail') },
+               'Combine' => { ndx => 7, key => 'C', value => $locale->text('Combine') },
 	       'Remove' => { ndx => 8, key => 'R', value => $locale->text('Remove') },
 	      );
 
@@ -950,8 +953,11 @@ print qq|
     delete $button{'E-mail'};
     delete $button{'Print'} if ! @{ $form->{all_printer} };
   }
+  if (!$pdftk) {
+    delete $button{'Combine'};
+  }
 
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
     
 
   if ($form->{menubar}) {
@@ -985,6 +991,39 @@ sub deselect_all {
   $form->{allbox} = "";
   &list_spool;
   
+}
+
+
+sub combine {
+
+  use Cwd;
+  $dir = cwd();
+  $files = "";
+
+  for (1 .. $form->{rowcount}) {
+    if ($form->{"ndx_$_"}) {
+      if ($form->{"spoolfile_$_"} =~ /\.pdf$/) {
+        $files .= qq|$form->{"spoolfile_$_"} |;
+      }
+    }
+  }
+
+  $form->{format} = "pdf";
+
+  if ($files) {
+    chdir("$spool/$myconfig{dbname}");
+    if ($filename = BP->spoolfile(\%myconfig, \%$form)) {
+      @args = ("pdftk $files cat output $filename");
+      system(@args) % 256 == 0 or $form->error("@args : $?");
+    }
+  } else {
+    $form->error($locale->text('Nothing selected!'));
+  }
+
+  chdir("$dir");
+
+  $form->redirect;
+
 }
 
 

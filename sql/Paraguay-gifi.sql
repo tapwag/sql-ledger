@@ -1,8 +1,6 @@
 -- Paraguay GIFI
 -- Plan de Cuentas Fiscal para Paraguay
 --
-SET client_encoding = 'ISO-8859-1';
---
 INSERT INTO gifi (accno,description) VALUES ('1','ACTIVOS');
 INSERT INTO gifi (accno,description) VALUES ('1-01','ACTIVO CORRIENTE');
 INSERT INTO gifi (accno,description) VALUES ('1-01-01','DISPONIBILIDADES');

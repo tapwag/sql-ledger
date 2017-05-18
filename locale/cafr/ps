@@ -192,6 +192,7 @@ $self{texts} = {
   'Report for'                  => 'Rapport de',
   'Required by'                 => 'Requis pour',
   'SKU'                         => 'SKU',
+  'SSN'                         => 'Numéro sécurité sociale',
   'Sales Invoice.'              => 'Facture de vente.',
   'Sales Order'                 => 'Commande de vente',
   'Salesperson'                 => 'Vendeur',

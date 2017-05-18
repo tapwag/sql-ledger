@@ -182,6 +182,7 @@ $self{texts} = {
   'Report for'                  => 'Rapport voor',
   'Required by'                 => 'Nodig voor',
   'SKU'                         => 'SKU',
+  'SSN'                         => 'Pers.nr.',
   'Sales Order'                 => 'Verkooporder',
   'Salesperson'                 => 'Verkoper',
   'Screen'                      => 'Scherm',

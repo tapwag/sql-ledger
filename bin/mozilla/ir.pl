@@ -115,7 +115,7 @@ sub invoice_links {
 
   # warehouses
   if (@{ $form->{all_warehouse} }) {
-    $form->{selectwarehouse} = ""; 
+    $form->{selectwarehouse} = "\n"; 
     $form->{warehouse} = "$form->{warehouse}--$form->{warehouse_id}" if $form->{warehouse_id};
 
     for (@{ $form->{all_warehouse} }) { $form->{selectwarehouse} .= qq|$_->{description}--$_->{id}\n| }
@@ -612,7 +612,7 @@ sub form_footer {
               <tr height="5"></tr>
 	      <tr>
 	        <td align=right>
-		<input name=taxincluded class=checkbox type=checkbox value=1 $form->{taxincluded}></td><th align=left>|.$locale->text('Tax Included').qq|</th>
+		<input name=taxincluded class=checkbox type=checkbox value=1 $form->{taxincluded} onChange="javascript:document.main.submit()"></td><th align=left>|.$locale->text('Tax Included').qq|</th>
 	      </tr>
 |;
   }
@@ -956,7 +956,7 @@ sub form_footer {
       for (keys %button) { delete $button{$_} if ! $a{$_} }
     }
 
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+    $form->print_button(\%button);
     
   }
 

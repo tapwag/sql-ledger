@@ -167,7 +167,7 @@ sub order_links {
 
   # warehouses
   if (@{ $form->{all_warehouse} }) {
-    $form->{selectwarehouse} = "";
+    $form->{selectwarehouse} = "\n";
     $form->{warehouse} = "$form->{warehouse}--$form->{warehouse_id}" if $form->{warehouse_id};
 
     for (@{ $form->{all_warehouse} }) { $form->{selectwarehouse} .= qq|$_->{description}--$_->{id}\n| }
@@ -610,7 +610,7 @@ sub form_header {
 
   if ($form->{"select$form->{vc}"}) {
     $vc .= qq|
-                <td nowrap><select name=$form->{vc} onChange="javascript:document.forms[0].submit()">|.$form->select_option($form->{"select$form->{vc}"}, $form->{$form->{vc}}, 1).qq|</select>
+                <td nowrap><select name=$form->{vc} onChange="javascript:document.main.submit()">|.$form->select_option($form->{"select$form->{vc}"}, $form->{$form->{vc}}, 1).qq|</select>
 		$vcref
 		</td>
 	      </tr>
@@ -651,7 +651,7 @@ sub form_header {
 		</select>
 		</td>
 	      </tr>
-| if $form->{selectwarehouse};
+| if $form->{selectwarehouse} && $form->{type} !~ /_quotation/;
 
   $form->{oldwarehouse} = $form->{warehouse};
 
@@ -816,7 +816,7 @@ sub form_footer {
             <tr height="5"></tr>
             <tr>
 	      <td align=right>
-	      <input name=taxincluded class=checkbox type=checkbox value=1 $form->{taxincluded}></td>
+	      <input name=taxincluded class=checkbox type=checkbox value=1 $form->{taxincluded} onChange="javascript:document.main.submit()"></td>
 	      <th align=left>|.$locale->text('Tax Included').qq|</th>
 	    </tr>
 |;
@@ -1129,14 +1129,15 @@ sub form_footer {
   }
 
   for (keys %button) { delete $button{$_} if ! $f{$_} }
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+
+  $form->print_button(\%button);
 
   if ($form->{menubar}) {
     require "$form->{path}/menu.pl";
     &menubar;
   }
 
-  $form->hide_form(qw(rowcount readonly callback path login));
+  $form->hide_form(qw(backorder rowcount readonly callback path login));
   
   print qq| 
 </form>
@@ -1487,12 +1488,13 @@ sub search {
 
   # warehouse
   if (@{ $form->{all_warehouse} }) {
-    $form->{selectwarehouse} = "\n";
-    $form->{warehouse} = qq|$form->{warehouse}--$form->{warehouse_id}|;
+    if ($form->{type} !~ /_quotation/) {
+      $form->{selectwarehouse} = "\n";
+      $form->{warehouse} = qq|$form->{warehouse}--$form->{warehouse_id}|;
 
-    for (@{ $form->{all_warehouse} }) { $form->{selectwarehouse} .= qq|$_->{description}--$_->{id}\n| }
+      for (@{ $form->{all_warehouse} }) { $form->{selectwarehouse} .= qq|$_->{description}--$_->{id}\n| }
 
-    $warehouse = qq|
+      $warehouse = qq|
 	    <tr>
 	      <th align=right>|.$locale->text('Warehouse').qq|</th>
 	      <td><select name=warehouse>|
@@ -1504,7 +1506,8 @@ sub search {
 	    </tr>
 |;
 
-    $l_warehouse = qq|<input name="l_warehouse" class=checkbox type=checkbox value=Y> |.$locale->text('Warehouse');
+      $l_warehouse = qq|<input name="l_warehouse" class=checkbox type=checkbox value=Y> |.$locale->text('Warehouse');
+    }
 
   }
 
@@ -1586,6 +1589,8 @@ sub search {
 
 
     $l_ponumber = qq|<input name="l_ponumber" class=checkbox type=checkbox value=Y> |.$locale->text('PO Number');
+
+    $l_backorder = qq|<input name="l_backorder" class=checkbox type=checkbox value=Y> |.$locale->text('Backorder');
   }
 
   @a = ();
@@ -1609,6 +1614,7 @@ sub search {
   push @a, qq|<input name="l_curr" class=checkbox type=checkbox value=Y checked> |.$locale->text('Currency');
   push @a, qq|<input name="l_memo" class=checkbox type=checkbox value=Y> |.$locale->text('Line Item');
   push @a, qq|<input name="l_notes" class=checkbox type=checkbox value=Y> |.$locale->text('Notes');
+  push @a, $l_backorder if $l_backorder;
 
   $form->helpref("search_$form->{type}", $myconfig{countrycode});
 
@@ -1886,7 +1892,7 @@ sub transactions {
       push @column_index, $_;
 
       if ($form->{l_curr} && $_ =~ /(amount|tax)/) {
-	push @column_index, "fx_$_";
+        push @column_index, "fx_$_";
       }
       
       # add column to href and callback
@@ -1910,8 +1916,8 @@ sub transactions {
     if ($form->{type} eq 'purchase_order') {
       $form->{title} = $locale->text('Purchase Orders');
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Purchase Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Purchase Order').qq|"> |;
-	$button{'Order Entry--Purchase Order'}{order} = $i++;
+        $button{'Order Entry--Purchase Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Purchase Order').qq|"> |;
+        $button{'Order Entry--Purchase Order'}{order} = $i++;
       }
     }
     if ($form->{type} eq 'consolidate_purchase_order') {
@@ -1919,8 +1925,8 @@ sub transactions {
       $form->{type} = "purchase_order";
       unshift @column_index, "ndx";
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Purchase Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Consolidate Orders').qq|"> |;
-	$button{'Order Entry--Purchase Order'}{order} = $i++;
+        $button{'Order Entry--Purchase Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Consolidate Orders').qq|"> |;
+        $button{'Order Entry--Purchase Order'}{order} = $i++;
       }
     }
 
@@ -1929,8 +1935,8 @@ sub transactions {
       $quotation = $locale->text('RFQ');
 
       if ($myconfig{acs} !~ /Quotations--Quotations/) {
-	$button{'Quotations--RFQ'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('RFQ ').qq|"> |;
-	$button{'Quotations--RFQ'}{order} = $i++;
+        $button{'Quotations--RFQ'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('RFQ ').qq|"> |;
+        $button{'Quotations--RFQ'}{order} = $i++;
       }
       
     }
@@ -1945,8 +1951,8 @@ sub transactions {
       $employee = $locale->text('Salesperson');
 
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Sales Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Sales Order').qq|"> |;
-	$button{'Order Entry--Sales Order'}{order} = $i++;
+        $button{'Order Entry--Sales Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Sales Order').qq|"> |;
+        $button{'Order Entry--Sales Order'}{order} = $i++;
       }
 
     }
@@ -1956,8 +1962,8 @@ sub transactions {
       $employee = $locale->text('Salesperson');
       unshift @column_index, "ndx";
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Purchase Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Generate Purchase Orders').qq|"> |;
-	$button{'Order Entry--Purchase Order'}{order} = $i++;
+        $button{'Order Entry--Purchase Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Generate Purchase Orders').qq|"> |;
+        $button{'Order Entry--Purchase Order'}{order} = $i++;
       }
       $callback .= "&detail=$form->{detail}";
       $href .= "&detail=$form->{detail}";
@@ -1967,19 +1973,19 @@ sub transactions {
       $form->{type} = "sales_order";
       unshift @column_index, "ndx";
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Sales Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Consolidate Orders').qq|"> |;
-	$button{'Order Entry--Sales Order'}{order} = $i++;
+        $button{'Order Entry--Sales Order'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Consolidate Orders').qq|"> |;
+        $button{'Order Entry--Sales Order'}{order} = $i++;
       }
       $orddescription = qq|
       <tr>
         <td>
-	  <table>
-	    <tr>
-	      <th>|.$locale->text('Description').qq|</th>
-	      <td><input name=orddescription value="$form->{orddescription}" size=40></td>
-	    </tr>
-	  </table>
-	</td>
+          <table>
+            <tr>
+              <th>|.$locale->text('Description').qq|</th>
+              <td><input name=orddescription value="$form->{orddescription}" size=40></td>
+            </tr>
+          </table>
+        </td>
       </tr>
 |;
     }
@@ -1989,19 +1995,19 @@ sub transactions {
       $employee = $locale->text('Salesperson');
       unshift @column_index, "ndx";
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Consolidate--Orders to Invoice'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Consolidate Orders to Invoice').qq|"> |;
-	$button{'Order Entry--Consolidate--Orders to Invoice'}{order} = $i++;
+        $button{'Order Entry--Consolidate--Orders to Invoice'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Consolidate Orders to Invoice').qq|"> |;
+        $button{'Order Entry--Consolidate--Orders to Invoice'}{order} = $i++;
       }
       $orddescription = qq|
       <tr>
         <td>
-	  <table>
-	    <tr>
-	      <th>|.$locale->text('Description').qq|</th>
-	      <td><input name=orddescription value="$form->{orddescription}" size=40></td>
-	    </tr>
-	  </table>
-	</td>
+          <table>
+            <tr>
+              <th>|.$locale->text('Description').qq|</th>
+              <td><input name=orddescription value="$form->{orddescription}" size=40></td>
+            </tr>
+          </table>
+        </td>
       </tr>
 |;
     }
@@ -2011,8 +2017,8 @@ sub transactions {
       $employee = $locale->text('Salesperson');
       unshift @column_index, "ndx";
       if ($myconfig{acs} !~ /Order Entry--Order Entry/) {
-	$button{'Order Entry--Generate--Sales Invoices'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Generate Sales Invoices').qq|"> |;
-	$button{'Order Entry--Generate--Generate Sales Invoices'}{order} = $i++;
+        $button{'Order Entry--Generate--Sales Invoices'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Generate Sales Invoices').qq|"> |;
+        $button{'Order Entry--Generate--Generate Sales Invoices'}{order} = $i++;
       }
     }
 
@@ -2027,8 +2033,8 @@ sub transactions {
       $quotation = $locale->text('Quotation');
 
       if ($myconfig{acs} !~ /Quotations--Quotations/) {
-	$button{'Quotations--Quotation'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Quotation ').qq|"> |;
-	$button{'Quotations--Quotation'}{order} = $i++;
+        $button{'Quotations--Quotation'}{code} = qq|<input class=submit type=submit name=action value="|.$locale->text('Quotation ').qq|"> |;
+        $button{'Quotations--Quotation'}{order} = $i++;
       }
       
     }
@@ -2090,7 +2096,7 @@ sub transactions {
   <tr>
     <td>
       <table width=100%>
-	<tr class=listheading>|;
+        <tr class=listheading>|;
 
   for (@column_index) { print "\n$column_header{$_}" }
 
@@ -2119,8 +2125,8 @@ sub transactions {
 
     if ($form->{l_subtotal} eq 'Y') {
       if ($sameitem ne $ref->{$form->{sort}}) {
-	&subtotal;
-	$sameitem = $ref->{$form->{sort}};
+        &subtotal;
+        $sameitem = $ref->{$form->{sort}};
       }
     }
     
@@ -2638,6 +2644,8 @@ sub create_backorder {
   # clear flags
   for (qw(id subject message cc bcc printed emailed queued audittrail closed)) { delete $form->{$_} }
 
+  $form->{backorder} = 1;
+
   OE->save(\%myconfig, \%$form);
  
   # rebuild rows for invoice
@@ -2695,7 +2703,7 @@ sub ship_receive {
 
   # warehouse
   if (@{ $form->{all_warehouse} }) {
-    $form->{selectwarehouse} = "";
+    $form->{selectwarehouse} = "\n";
     for (@{ $form->{all_warehouse} }) { $form->{selectwarehouse} .= qq|$_->{description}--$_->{id}\n| }
     $form->{selectwarehouse} = $form->escape($form->{selectwarehouse},1);
   }
@@ -3026,18 +3034,16 @@ sub display_ship_receive {
   %button = ('Update' => { ndx => 1, key => 'U', value => $locale->text('Update') },
              'Preview' => { ndx => 2, key => 'V', value => $locale->text('Preview') },
              'Print' => { ndx => 3, key => 'P', value => $locale->text('Print') },
-	     'Ship to' => { ndx => 4, key => 'T', value => $locale->text('Ship to') },
-	     'E-mail' => { ndx => 5, key => 'E', value => $locale->text('E-mail') },
-	     'Done' => { ndx => 11, key => 'D', value => $locale->text('Done') },
 	    );
   
-  for ("Update", "Print", "Preview") { $form->print_button(\%button, $_) }
-  
   if ($form->{type} eq 'ship_order') {
-    for ('Ship to', 'E-mail') { $form->print_button(\%button, $_) }
+    $button{'Ship to'} = { ndx => 4, key => 'T', value => $locale->text('Ship to') };
+    $button{'E-mail'} = { ndx => 5, key => 'E', value => $locale->text('E-mail') };
   }
   
-  $form->print_button(\%button, 'Done');
+  $button{'Done'} = { ndx => 11, key => 'D', value => $locale->text('Done') };
+
+  $form->print_button(\%button);
   
   if ($form->{menubar}) {
     require "$form->{path}/menu.pl";
@@ -3053,7 +3059,6 @@ sub display_ship_receive {
 </body>
 </html>
 |;
-
 
 }
 
@@ -3095,7 +3100,7 @@ sub generate_purchase_orders {
 
   $form->error($locale->text('Nothing selected!')) unless $ok;
   
-  ($null, $argv) = split /\?/, $form->{callback};
+  (undef, $argv) = split /\?/, $form->{callback};
   
   for (split /\&/, $argv) {
     ($key, $value) = split /=/, $_;
@@ -3322,7 +3327,7 @@ sub consolidate_orders {
   
   $form->error($locale->text('Nothing selected!')) unless $ok;
 
-  ($null, $argv) = split /\?/, $form->{callback};
+  (undef, $argv) = split /\?/, $form->{callback};
   
   for (split /\&/, $argv) {
     ($key, $value) = split /=/, $_;
@@ -3437,9 +3442,9 @@ sub select_vendor {
   $form->header;
   
   print qq|
-<body onload="document.forms[0].vendor.focus()" />
+<body onload="document.main.vendor.focus()" />
 
-<form method=post action=$form->{script}>
+<form method=post name=main action=$form->{script}>
 
 <b>|.$locale->text('Vendor').qq|</b> <input name=vendor size=40>
 

@@ -132,6 +132,7 @@ sub edit {
   }
 
   $form->{rowcount} = $i;
+  $form->{oldtransdate} = $form->{transdate};
   $form->{focus} = "debit_$i";
 
   # readonly
@@ -421,7 +422,7 @@ sub search {
 
   %button = ('Continue' => { ndx => 1, key => 'C', value => $locale->text('Continue') } );
   
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
   
   $form->{sort} ||= "transdate";
   $form->{direction} ||= "ASC";
@@ -606,6 +607,8 @@ sub transactions {
 
   push @columns, "gifi_contra";
   $column_data{gifi_contra} = $column_data{contra};
+  $form->{l_gifi_contra} = "Y" if ($form->{l_gifi_accno} && $form->{l_contra});
+  delete $form->{l_contra} unless $form->{l_accno};
   
   $columns{debit} = 1;
   $columns{credit} = 1;
@@ -946,7 +949,7 @@ sub transactions {
   
   $form->hide_form(qw(callback path login report reportcode reportlogin column_index flds sort direction));
   
-  for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+  $form->print_button(\%button);
   
   if ($form->{menubar}) {
     require "$form->{path}/menu.pl";
@@ -1019,7 +1022,7 @@ sub update {
   @flds = qw(accno debit credit projectnumber source memo cleared fx_transaction);
 
   for $i (1 .. $form->{rowcount}) {
-    unless (($form->{"debit_$i"} eq "") && ($form->{"credit_$i"} eq "")) {
+    if ($form->{"debit_$i"} || $form->{"credit_$i"}) {
       for (qw(debit credit)) { $form->{"${_}_$i"} = $form->parse_amount(\%myconfig, $form->{"${_}_$i"}) }
       
       push @f, {};
@@ -1380,7 +1383,8 @@ sub form_footer {
     $f{'Schedule'} = 0 if $form->{batch};
     
     for (keys %button) { delete $button{$_} if ! $f{$_} }
-    for (sort { $button{$a}->{ndx} <=> $button{$b}->{ndx} } keys %button) { $form->print_button(\%button, $_) }
+
+    $form->print_button(\%button);
     
   }
   
