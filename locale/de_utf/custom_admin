@@ -3,7 +3,11 @@ $self{charset} = 'UTF-8';
 $self{texts} = {
   'Accounting'                  => 'Buchhaltung',
   'Continue'                    => 'Weiter',
+  'Local branches'              => 'Lokale Zweige',
   'Main Menu'                   => 'Hauptmenü',
+  'Software Administration'     => 'Softwareverwaltung',
+  'Switch branch'               => 'Zweig wechseln',
+  'Update Software'             => 'Software aktualisieren',
 };
 
 $self{subs} = {

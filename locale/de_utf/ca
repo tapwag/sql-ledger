@@ -13,6 +13,7 @@ gewählten Monat ist',
   'August'                      => 'August',
   'Balance'                     => 'Bilanz',
   'Chart of Accounts'           => 'Kontenübersicht',
+  'Closed'                      => 'Geschlossen',
   'Credit'                      => 'Haben',
   'Current'                     => 'Aktuell',
   'Date'                        => 'Datum',
@@ -77,6 +78,7 @@ $self{subs} = {
   'list_transactions'           => 'list_transactions',
   'pickvalue'                   => 'pickvalue',
   'resize'                      => 'resize',
+  'show_progress'               => 'show_progress',
   'buchungsliste'               => 'list_transactions',
 };
 

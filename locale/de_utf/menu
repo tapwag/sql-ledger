@@ -33,7 +33,7 @@ $self{texts} = {
   'All Items'                   => 'Alle Artikel',
   'Allowed range for selected month is' => 'Erlaubter Rahmen für den 
 gewählten Monat ist',
-  'Allowed range is'            => 'Erlaubter Rahmen is',
+  'Allowed range is'            => 'Erlaubter Rahmen ist',
   'April'                       => 'April',
   'Assemblies'                  => 'Erzeugnisse',
   'Assembly BOM Transfer'       => 'Stückliste für Herstellung 
@@ -102,9 +102,10 @@ gewählten Monat ist',
   'March'                       => 'März',
   'May'                         => 'Mai',
   'Merchandise'                 => 'Waren',
-  'Mimetypes'                   => 'Mimetypen',
+  'Mimetypes'                   => 'Mimearbten',
   'Mo'                          => 'Mo',
   'Monitor'                     => 'Monitor',
+  'New Window'                  => 'Neues Fenster',
   'Non-taxable'                 => 'Steuerfrei',
   'November'                    => 'November',
   'October'                     => 'Oktober',
@@ -194,6 +195,7 @@ gewählten Monat ist',
   'Void Check'                  => 'Ungültiger Scheck',
   'Void Receipt'                => 'Ungpltige Quittung',
   'Vouchers'                    => 'Belege',
+  'WLprinter'                   => 'WLprinter',
   'Wages'                       => 'Löhne',
   'Warehouse Transfer'          => 'Lagertransfer',
   'Warehouses'                  => 'Warenlager',
@@ -220,6 +222,7 @@ $self{subs} = {
   'pickvalue'                   => 'pickvalue',
   'resize'                      => 'resize',
   'section_menu'                => 'section_menu',
+  'show_progress'               => 'show_progress',
 };
 
 1;
